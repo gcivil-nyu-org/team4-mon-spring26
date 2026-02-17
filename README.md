@@ -41,19 +41,6 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-## Project Structure
-
-```
-TenatGaurdNYC/
-├── buildings/       # Building data & ML models
-├── users/           # Authentication
-├── forums/          # Tenant chat
-├── static/          # Frontend assets
-├── templates/       # HTML templates
-├── docs/            # Documentation & proposal
-└── tests/           # Test suite
-```
-
 ## Team
 
 - **Product Owner**: Jithendra ([@jithendra1798](https://github.com/jithendra1798))
