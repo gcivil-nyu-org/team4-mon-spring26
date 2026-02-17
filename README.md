@@ -24,8 +24,8 @@ ML-powered web app to predict NYC building housing violations and facilitate ten
 
 ```bash
 # Clone and setup
-git clone https://github.com/jithendra1798/TenatGaurdNYC.git
-cd TenatGaurdNYC
+git clone https://github.com/gcivil-nyu-org/team4-mon-spring26.git
+cd team4-mon-spring26
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -45,7 +45,7 @@ python manage.py runserver
 
 ```
 TenatGaurdNYC/
-├── buildings/        # Building data & ML models
+├── buildings/       # Building data & ML models
 ├── users/           # Authentication
 ├── forums/          # Tenant chat
 ├── static/          # Frontend assets
