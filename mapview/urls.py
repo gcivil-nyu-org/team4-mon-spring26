@@ -1,0 +1,10 @@
+from django.urls import path
+
+from .views import boundary_geojson_view, dashboard_view, geocode_view, nta_geojson_view
+
+urlpatterns = [
+    path("", dashboard_view, name="dashboard"),
+    path("api/nta-geojson/", nta_geojson_view, name="nta-geojson"),
+    path("api/boundaries/", boundary_geojson_view, name="boundaries"),
+    path("api/geocode/", geocode_view, name="geocode"),
+]
