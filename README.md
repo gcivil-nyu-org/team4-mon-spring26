@@ -41,6 +41,28 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+## Streamlit Demo (Live Link Ready)
+
+You can deploy a shareable live demo with Streamlit Community Cloud using the existing processed GeoJSON files.
+
+### Run locally
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+### Deploy to Streamlit Cloud
+
+1. Push your branch to GitHub.
+2. Go to [share.streamlit.io](https://share.streamlit.io/) and sign in with GitHub.
+3. Create a new app:
+   - Repository: `gcivil-nyu-org/team4-mon-spring26`
+   - Branch: your feature branch
+   - Main file path: `streamlit_app.py`
+4. Click **Deploy**.
+5. Copy the generated app URL and replace the `Live Demo` placeholder in this README.
+
 ## Team
 
 - **Product Owner**: Jithendra ([@jithendra1798](https://github.com/jithendra1798))

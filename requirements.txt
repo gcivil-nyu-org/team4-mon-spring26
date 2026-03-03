@@ -2,3 +2,4 @@ django
 requests
 shapely
 python-dotenv
+streamlit
