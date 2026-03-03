@@ -57,22 +57,137 @@
     };
   }
 
+  /* ---- Tabbed info-panel ------------------------------------------------ */
+
+  function switchTab(tabName) {
+    panelElement.querySelectorAll(".panel-tab").forEach((t) => t.classList.remove("active"));
+    panelElement.querySelectorAll(".tab-content").forEach((c) => c.classList.add("hidden"));
+    const btn = panelElement.querySelector(`[data-tab="${tabName}"]`);
+    if (btn) btn.classList.add("active");
+    const pane = document.getElementById(`tab-${tabName}`);
+    if (pane) pane.classList.remove("hidden");
+  }
+
   function renderPanel(feature) {
     const props = feature.properties;
-    const issues = props.top_issues
-      .map((issue) => `<li>${issue}</li>`)
-      .join("");
+    const ntaCode = props.nta_code;
+    const issues = props.top_issues.map((issue) => `<li>${issue}</li>`).join("");
+
+    const extraStats =
+      props.total_violations !== undefined
+        ? `<p><strong>HPD Violations:</strong> ${props.total_violations} &nbsp;|&nbsp; <strong>311 Complaints:</strong> ${props.total_complaints}</p>`
+        : "";
 
     panelElement.innerHTML = `
-      <h2>${props.nta_name}</h2>
-      <p><strong>Borough:</strong> ${props.borough}</p>
-      <p><strong>Livability Score:</strong> ${Number(props.placeholder_score).toFixed(1)} / 10</p>
-      <p>${props.placeholder_summary}</p>
-      <p><strong>Top Reported Issues:</strong></p>
-      <ul>${issues}</ul>
+      <div class="panel-header">
+        <h2>${props.nta_name}</h2>
+        <button class="panel-close" id="panel-close-btn" title="Close">&times;</button>
+      </div>
+      <div class="panel-tabs">
+        <button class="panel-tab active" data-tab="summary">Summary</button>
+        <button class="panel-tab" data-tab="violations">Violations</button>
+        <button class="panel-tab" data-tab="complaints">Complaints</button>
+      </div>
+      <div class="tab-content" id="tab-summary">
+        <p><strong>Borough:</strong> ${props.borough}</p>
+        <p><strong>Livability Score:</strong> ${Number(props.placeholder_score).toFixed(1)} / 10</p>
+        ${extraStats}
+        <p>${props.placeholder_summary}</p>
+        <p><strong>Top Reported Issues:</strong></p>
+        <ul>${issues}</ul>
+      </div>
+      <div class="tab-content hidden" id="tab-violations">
+        <p class="loading-text">Loading HPD violations…</p>
+      </div>
+      <div class="tab-content hidden" id="tab-complaints">
+        <p class="loading-text">Loading 311 complaints…</p>
+      </div>
     `;
     panelElement.classList.remove("hidden");
+
+    panelElement.querySelectorAll(".panel-tab").forEach((tab) => {
+      tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+    });
+
+    document.getElementById("panel-close-btn").addEventListener("click", () => {
+      resetActiveSelection();
+    });
+
+    fetchViolations(ntaCode);
+    fetchComplaints(ntaCode);
   }
+
+  async function fetchViolations(ntaCode) {
+    const container = document.getElementById("tab-violations");
+    try {
+      const resp = await fetch(`/api/nta-violations/?nta_code=${encodeURIComponent(ntaCode)}&limit=25`);
+      const data = await resp.json();
+
+      if (!resp.ok || !data.violations || data.violations.length === 0) {
+        container.innerHTML = "<p class='empty-text'>No HPD violations found for this area.</p>";
+        return;
+      }
+
+      const rows = data.violations
+        .map(
+          (v) => `
+        <div class="data-card violation-${(v.violation_class || "").toLowerCase()}">
+          <div class="data-card-header">
+            <span class="badge badge-${(v.violation_class || "").toLowerCase()}">Class ${v.violation_class || "?"}</span>
+            <span class="data-date">${v.inspection_date || "N/A"}</span>
+          </div>
+          <p class="data-address">${v.address || "Unknown address"}${v.apartment ? ", Apt " + v.apartment : ""}</p>
+          <p class="data-desc">${v.nov_description || "No description available"}</p>
+          <p class="data-status"><strong>Status:</strong> ${v.current_status || v.violation_status || "Unknown"}</p>
+        </div>`
+        )
+        .join("");
+
+      container.innerHTML = `
+        <p class="data-count">${data.count} violation${data.count !== 1 ? "s" : ""} found</p>
+        <div class="data-list">${rows}</div>
+      `;
+    } catch {
+      container.innerHTML = "<p class='empty-text'>Failed to load violations.</p>";
+    }
+  }
+
+  async function fetchComplaints(ntaCode) {
+    const container = document.getElementById("tab-complaints");
+    try {
+      const resp = await fetch(`/api/nta-complaints/?nta_code=${encodeURIComponent(ntaCode)}&limit=25`);
+      const data = await resp.json();
+
+      if (!resp.ok || !data.complaints || data.complaints.length === 0) {
+        container.innerHTML = "<p class='empty-text'>No 311 complaints found for this area.</p>";
+        return;
+      }
+
+      const rows = data.complaints
+        .map(
+          (c) => `
+        <div class="data-card">
+          <div class="data-card-header">
+            <span class="badge">${c.complaint_type || "Unknown"}</span>
+            <span class="data-date">${c.created_date ? c.created_date.split("T")[0] : "N/A"}</span>
+          </div>
+          <p class="data-address">${c.incident_address || "No address"}</p>
+          <p class="data-desc">${c.descriptor || "No details"}</p>
+          <p class="data-status"><strong>Status:</strong> ${c.status || "Unknown"}</p>
+        </div>`
+        )
+        .join("");
+
+      container.innerHTML = `
+        <p class="data-count">${data.count} complaint${data.count !== 1 ? "s" : ""} found</p>
+        <div class="data-list">${rows}</div>
+      `;
+    } catch {
+      container.innerHTML = "<p class='empty-text'>Failed to load complaints.</p>";
+    }
+  }
+
+  /* ---- Popup (hover / click tooltip on map) ----------------------------- */
 
   function popupHtml(feature) {
     const props = feature.properties;

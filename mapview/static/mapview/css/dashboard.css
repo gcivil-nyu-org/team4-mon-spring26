@@ -16,7 +16,7 @@ body {
 .layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: calc(100vh - 3.2rem);
 }
 
 .toolbar {
@@ -25,8 +25,8 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem;
-  background: #0f172a;
+  padding: 0.75rem 1rem;
+  background: #1e293b;
   color: #f8fafc;
 }
 
@@ -71,20 +71,23 @@ body {
 
 #map {
   width: 100%;
-  height: calc(100vh - 8.5rem);
+  height: calc(100vh - 9.5rem);
   min-height: 24rem;
 }
 
+/* ---- Info panel (right side) ---- */
 .info-panel {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 20rem;
-  max-width: calc(100% - 2rem);
-  background: rgba(255, 255, 255, 0.96);
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 22rem;
+  max-width: calc(100% - 1.5rem);
+  max-height: calc(100vh - 12rem);
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.97);
   border-radius: 0.5rem;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.2);
-  padding: 0.75rem 1rem;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.18);
+  padding: 0;
   z-index: 800;
 }
 
@@ -92,39 +95,204 @@ body {
   display: none;
 }
 
-.info-panel h2 {
-  margin: 0 0 0.4rem;
+/* Panel header */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem 0.4rem;
+}
+
+.panel-header h2 {
+  margin: 0;
   font-size: 1rem;
 }
 
-.info-panel p {
-  margin: 0.35rem 0;
+.panel-close {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0 0.2rem;
+  line-height: 1;
 }
 
-.info-panel ul {
+.panel-close:hover {
+  color: #0f172a;
+}
+
+/* Tabs */
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 0.75rem;
+  gap: 0;
+}
+
+.panel-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.panel-tab:hover {
+  color: #0f172a;
+}
+
+.panel-tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* Tab content */
+.tab-content {
+  padding: 0.75rem 1rem;
+}
+
+.tab-content.hidden {
+  display: none;
+}
+
+.tab-content p {
+  margin: 0.3rem 0;
+  font-size: 0.88rem;
+}
+
+.tab-content ul {
   margin: 0.3rem 0 0;
   padding-left: 1.2rem;
+  font-size: 0.88rem;
 }
 
+/* Data cards (violations / complaints) */
+.data-count {
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.5rem !important;
+}
+
+.data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.data-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.35rem;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid #94a3b8;
+}
+
+.data-card.violation-c {
+  border-left-color: #dc2626;
+}
+
+.data-card.violation-b {
+  border-left-color: #f59e0b;
+}
+
+.data-card.violation-a {
+  border-left-color: #3b82f6;
+}
+
+.data-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.badge-c {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-b {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-a {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.data-date {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.data-address {
+  font-weight: 600;
+  font-size: 0.82rem !important;
+}
+
+.data-desc {
+  font-size: 0.78rem !important;
+  color: #475569;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.data-status {
+  font-size: 0.78rem !important;
+  color: #475569;
+}
+
+.loading-text {
+  color: #64748b;
+  font-style: italic;
+}
+
+.empty-text {
+  color: #94a3b8;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* Status bar */
 .status-message {
   margin: 0;
-  padding: 0.75rem 1rem;
-  min-height: 2.25rem;
-  font-size: 0.95rem;
+  padding: 0.5rem 1rem;
+  min-height: 2rem;
+  font-size: 0.88rem;
   color: #334155;
+  background: #f1f5f9;
 }
 
 @media (max-width: 720px) {
   #map {
-    height: calc(100vh - 12rem);
+    height: calc(100vh - 14rem);
   }
 
   .info-panel {
     top: auto;
     left: 0.5rem;
     right: 0.5rem;
-    bottom: 0.8rem;
+    bottom: 3rem;
     width: auto;
     max-width: none;
+    max-height: 45vh;
   }
 }
