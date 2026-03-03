@@ -1,0 +1,43 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}TenantGuard NYC{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/base.css' %}" />
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body>
+    <nav class="site-nav">
+      <div class="nav-container">
+        <a href="{% url 'dashboard' %}" class="nav-brand">🏠 TenantGuard NYC</a>
+        <div class="nav-links">
+          {% if user.is_authenticated %}
+            <span class="nav-user">{{ user.get_short_name|default:user.username }}</span>
+            <a href="{% url 'profile' %}" class="nav-link">Profile</a>
+            <form method="post" action="{% url 'logout' %}" class="nav-logout-form">
+              {% csrf_token %}
+              <button type="submit" class="nav-link nav-link-outline">Logout</button>
+            </form>
+          {% else %}
+            <a href="{% url 'login' %}" class="nav-link">Login</a>
+            <a href="{% url 'register' %}" class="nav-link nav-link-primary">Register</a>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    {% if messages %}
+    <div class="messages-container">
+      {% for message in messages %}
+      <div class="message message-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

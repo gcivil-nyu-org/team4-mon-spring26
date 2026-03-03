@@ -8,6 +8,8 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
+from .models import Complaint311, HPDViolation, NTARiskScore
+
 PROCESSED_GEOJSON_PATH = Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
 BOUNDARY_LEVEL_PATHS = {
     "nta": Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson",
@@ -41,6 +43,23 @@ def nta_geojson_view(request):
     return JsonResponse(payload)
 
 
+def _overlay_db_scores(payload):
+    """Replace placeholder scores with real DB scores when available."""
+    scores = {s.nta_code: s for s in NTARiskScore.objects.all()}
+    if not scores:
+        return
+    for feature in payload.get("features", []):
+        nta_code = feature["properties"].get("nta_code")
+        if nta_code and nta_code in scores:
+            s = scores[nta_code]
+            feature["properties"]["placeholder_score"] = s.risk_score
+            feature["properties"]["placeholder_summary"] = s.summary
+            if s.top_complaint_types:
+                feature["properties"]["top_issues"] = s.top_complaint_types
+            feature["properties"]["total_violations"] = s.total_violations
+            feature["properties"]["total_complaints"] = s.total_complaints
+
+
 @require_GET
 def boundary_geojson_view(request):
     level = request.GET.get("level", "nta").strip().lower()
@@ -61,6 +80,9 @@ def boundary_geojson_view(request):
         )
     except json.JSONDecodeError:
         return JsonResponse({"error": f'GeoJSON for level "{level}" is invalid.'}, status=500)
+
+    # Overlay real risk scores from the database when available
+    _overlay_db_scores(payload)
 
     return JsonResponse(payload)
 
@@ -114,5 +136,99 @@ def geocode_view(request):
             "label": top.get("place_name", query),
             "lng": center[0],
             "lat": center[1],
+        }
+    )
+
+
+# ---------- Sprint 2: Violation / Complaint detail APIs ------------------- #
+
+
+@require_GET
+def nta_violations_view(request):
+    """Return recent HPD violations for a given NTA area."""
+    nta_code = request.GET.get("nta_code", "").strip()
+    if not nta_code:
+        return JsonResponse({"error": "nta_code parameter is required."}, status=400)
+
+    try:
+        limit = min(int(request.GET.get("limit", 50)), 200)
+    except (ValueError, TypeError):
+        limit = 50
+
+    qs = HPDViolation.objects.filter(nta_code=nta_code).order_by("-inspection_date")[:limit]
+
+    violations = [
+        {
+            "violation_id": v.violation_id,
+            "address": v.address,
+            "apartment": v.apartment,
+            "violation_class": v.violation_class,
+            "inspection_date": v.inspection_date.isoformat() if v.inspection_date else None,
+            "nov_description": v.nov_description,
+            "current_status": v.current_status,
+            "violation_status": v.violation_status,
+        }
+        for v in qs
+    ]
+
+    return JsonResponse({"nta_code": nta_code, "count": len(violations), "violations": violations})
+
+
+@require_GET
+def nta_complaints_view(request):
+    """Return recent 311 complaints for a given NTA area."""
+    nta_code = request.GET.get("nta_code", "").strip()
+    if not nta_code:
+        return JsonResponse({"error": "nta_code parameter is required."}, status=400)
+
+    try:
+        limit = min(int(request.GET.get("limit", 50)), 200)
+    except (ValueError, TypeError):
+        limit = 50
+
+    qs = Complaint311.objects.filter(nta_code=nta_code).order_by("-created_date")[:limit]
+
+    complaints = [
+        {
+            "unique_key": c.unique_key,
+            "created_date": c.created_date.isoformat() if c.created_date else None,
+            "complaint_type": c.complaint_type,
+            "descriptor": c.descriptor,
+            "incident_address": c.incident_address,
+            "status": c.status,
+            "resolution_description": c.resolution_description,
+        }
+        for c in qs
+    ]
+
+    return JsonResponse({"nta_code": nta_code, "count": len(complaints), "complaints": complaints})
+
+
+@require_GET
+def nta_risk_summary_view(request):
+    """Return the computed risk summary for a specific NTA."""
+    nta_code = request.GET.get("nta_code", "").strip()
+    if not nta_code:
+        return JsonResponse({"error": "nta_code parameter is required."}, status=400)
+
+    try:
+        score = NTARiskScore.objects.get(nta_code=nta_code)
+    except NTARiskScore.DoesNotExist:
+        return JsonResponse({"error": "No computed risk data for this NTA."}, status=404)
+
+    return JsonResponse(
+        {
+            "nta_code": score.nta_code,
+            "nta_name": score.nta_name,
+            "borough": score.borough,
+            "risk_score": score.risk_score,
+            "total_violations": score.total_violations,
+            "total_complaints": score.total_complaints,
+            "class_a_violations": score.class_a_violations,
+            "class_b_violations": score.class_b_violations,
+            "class_c_violations": score.class_c_violations,
+            "top_complaint_types": score.top_complaint_types,
+            "summary": score.summary,
+            "last_updated": score.last_updated.isoformat(),
         }
     )

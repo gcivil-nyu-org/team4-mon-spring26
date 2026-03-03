@@ -1,10 +1,9 @@
+{% extends "base.html" %}
 {% load static %}
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TenantGuard NYC - Livability Map</title>
+
+{% block title %}TenantGuard NYC - Livability Map{% endblock %}
+
+{% block extra_css %}
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -12,8 +11,9 @@
       crossorigin=""
     />
     <link rel="stylesheet" href="{% static 'mapview/css/dashboard.css' %}" />
-  </head>
-  <body>
+{% endblock %}
+
+{% block content %}
     <main class="layout">
       <header class="toolbar">
         <h1>NYC Livability Map</h1>
@@ -36,7 +36,9 @@
 
       <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
     </main>
+{% endblock %}
 
+{% block extra_scripts %}
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -49,5 +51,4 @@
       };
     </script>
     <script src="{% static 'mapview/js/dashboard.js' %}"></script>
-  </body>
-</html>
+{% endblock %}
