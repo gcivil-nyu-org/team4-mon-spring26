@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Review Verification #{{ vr.pk }} - Admin - TenantGuard NYC{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-card" style="max-width:36rem;">
+    <h1>Review Verification Request</h1>
+
+    <div class="review-detail-card">
+      <div class="vr-card-header" style="margin-bottom:0.75rem;">
+        <span class="vr-badge vr-badge-{{ vr.status }}">
+          {% if vr.is_pending %}⏳ Pending{% elif vr.is_approved %}✅ Approved{% else %}❌ Rejected{% endif %}
+        </span>
+        <span class="vr-date">Submitted {{ vr.created_at|date:"M d, Y H:i" }}</span>
+      </div>
+
+      <div class="review-section">
+        <h3>Applicant</h3>
+        <p><strong>{{ vr.user.get_full_name|default:vr.user.username }}</strong></p>
+        <p>{{ vr.user.email }}</p>
+        <p>Member since {{ vr.user.date_joined|date:"M d, Y" }}</p>
+      </div>
+
+      <div class="review-section">
+        <h3>Address</h3>
+        <p class="vr-address"><strong>📍 {{ vr.address }}</strong></p>
+        <p>{{ vr.borough }}{% if vr.zip_code %} · {{ vr.zip_code }}{% endif %}</p>
+        {% if vr.nta_code %}<p>NTA: {{ vr.nta_code }}</p>{% endif %}
+      </div>
+
+      <div class="review-section">
+        <h3>Proof Document</h3>
+        <p><strong>Type:</strong> {{ vr.get_document_type_display }}</p>
+        {% if vr.document %}
+          <p><strong>Uploaded file:</strong>
+            <a href="{{ vr.document.url }}" target="_blank" class="btn btn-sm btn-secondary" style="margin-left:0.5rem;">
+              📄 View Document
+            </a>
+          </p>
+        {% endif %}
+        {% if vr.document_description %}
+          <p>{{ vr.document_description }}</p>
+        {% else %}
+          {% if not vr.document %}
+          <p class="text-muted">No document or details provided.</p>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      {% if vr.reviewed_at %}
+      <div class="review-section">
+        <h3>Review History</h3>
+        <p>Reviewed {{ vr.reviewed_at|date:"M d, Y H:i" }}{% if vr.reviewed_by %} by {{ vr.reviewed_by.get_short_name|default:vr.reviewed_by.username }}{% endif %}</p>
+        {% if vr.admin_notes %}<p><strong>Notes:</strong> {{ vr.admin_notes }}</p>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    {% if vr.is_pending %}
+    <form method="post" class="review-actions" novalidate>
+      {% csrf_token %}
+
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label for="id_admin_notes">Admin Notes (optional)</label>
+        {{ form.admin_notes }}
+      </div>
+
+      <div class="review-buttons">
+        <button type="submit" name="action" value="approve" class="btn btn-approve" onclick="this.form.querySelector('[name=action]').value='approve';">
+          ✅ Approve &amp; Verify Tenant
+        </button>
+        <button type="submit" name="action" value="reject" class="btn btn-reject" onclick="this.form.querySelector('[name=action]').value='reject';">
+          ❌ Reject Request
+        </button>
+      </div>
+
+      {{ form.action }}
+    </form>
+    {% endif %}
+
+    <p class="auth-footer" style="margin-top:1.5rem;">
+      <a href="{% url 'admin-verification-queue' %}">← Back to Queue</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

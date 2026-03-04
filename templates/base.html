@@ -14,7 +14,13 @@
         <a href="{% url 'dashboard' %}" class="nav-brand">🏠 TenantGuard NYC</a>
         <div class="nav-links">
           {% if user.is_authenticated %}
-            <span class="nav-user">{{ user.get_short_name|default:user.username }}</span>
+            <span class="nav-user">
+              {{ user.get_short_name|default:user.username }}
+              {% if user.is_verified_tenant %}<span class="nav-verified" title="Verified Tenant">✅</span>{% endif %}
+            </span>
+            {% if user.is_admin_user %}
+              <a href="{% url 'admin-verification-queue' %}" class="nav-link">Queue</a>
+            {% endif %}
             <a href="{% url 'profile' %}" class="nav-link">Profile</a>
             <form method="post" action="{% url 'logout' %}" class="nav-logout-form">
               {% csrf_token %}

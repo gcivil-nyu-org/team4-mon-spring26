@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# User-uploaded media
+media/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
