@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Verification Status - TenantGuard NYC{% endblock %}
+
+{% block content %}
+<div class="verification-container">
+  <div class="verification-card">
+    <h1>Verification Status</h1>
+    <p class="auth-subtitle">Track your tenant verification requests</p>
+
+    {% if not verification_requests %}
+    <div class="empty-state">
+      <p>You haven't submitted any verification requests yet.</p>
+      <a href="{% url 'request-verification' %}" class="btn btn-primary">Request Verification</a>
+    </div>
+    {% else %}
+
+    <div class="vr-list">
+      {% for vr in verification_requests %}
+      <div class="vr-card vr-{{ vr.status }}">
+        <div class="vr-card-header">
+          <span class="vr-badge vr-badge-{{ vr.status }}">
+            {% if vr.is_pending %}⏳ Pending{% elif vr.is_approved %}✅ Approved{% else %}❌ Rejected{% endif %}
+          </span>
+          <span class="vr-date">{{ vr.created_at|date:"M d, Y" }}</span>
+        </div>
+
+        <p class="vr-address"><strong>📍 {{ vr.address }}</strong></p>
+        <p class="vr-detail">{{ vr.get_borough_display|default:vr.borough }}{% if vr.zip_code %} · {{ vr.zip_code }}{% endif %}</p>
+        <p class="vr-detail"><strong>Document:</strong> {{ vr.get_document_type_display }}</p>
+        {% if vr.document %}
+          <p class="vr-detail"><a href="{{ vr.document.url }}" target="_blank">📄 View Uploaded Document</a></p>
+        {% endif %}
+        {% if vr.document_description %}
+          <p class="vr-detail vr-desc">{{ vr.document_description }}</p>
+        {% endif %}
+
+        {% if vr.admin_notes %}
+        <div class="vr-admin-notes">
+          <strong>Admin Notes:</strong>
+          <p>{{ vr.admin_notes }}</p>
+        </div>
+        {% endif %}
+
+        {% if vr.reviewed_at %}
+        <p class="vr-reviewed">Reviewed {{ vr.reviewed_at|date:"M d, Y" }}{% if vr.reviewed_by %} by {{ vr.reviewed_by.get_short_name|default:vr.reviewed_by.username }}{% endif %}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if not user.is_verified_tenant and not user.has_pending_verification %}
+    <a href="{% url 'request-verification' %}" class="btn btn-primary btn-block" style="margin-top:1rem;">
+      Submit New Request
+    </a>
+    {% endif %}
+
+    {% endif %}
+
+    <p class="auth-footer" style="margin-top:1.5rem;">
+      <a href="{% url 'profile' %}">← Back to Profile</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
