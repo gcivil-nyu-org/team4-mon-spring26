@@ -4,3 +4,4 @@ shapely
 python-dotenv
 streamlit
 coverage
+gunicorn
