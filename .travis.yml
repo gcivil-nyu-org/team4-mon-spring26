@@ -1,6 +1,6 @@
 language: python
 python:
-  - "3.13"
+  - "3.14"
 
 install:
   - pip install -r requirements.txt
@@ -22,7 +22,6 @@ deploy:
   region: us-east-1
   app: TenantGuard       # Replace with your exact EB App Name
   env: tenantguard-env   # Replace with your exact EB Environment Name
-  bucket_name: elasticbeanstalk-us-east-1-xxxxxxxxxxxx  # MUST update this to your EB bucket
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
   on:
