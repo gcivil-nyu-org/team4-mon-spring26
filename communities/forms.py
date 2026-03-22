@@ -49,6 +49,7 @@ class ReportForm(forms.ModelForm):
             ),
         }
 
+
 class DirectMessageForm(forms.ModelForm):
     class Meta:
         model = DirectMessage

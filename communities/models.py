@@ -77,7 +77,11 @@ class Report(models.Model):
         Comment, on_delete=models.CASCADE, null=True, blank=True, related_name="reports"
     )
     message = models.ForeignKey(
-        DirectMessage, on_delete=models.CASCADE, null=True, blank=True, related_name="reports"
+        DirectMessage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reports",
     )
     reported_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

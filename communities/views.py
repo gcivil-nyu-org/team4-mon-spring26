@@ -235,17 +235,19 @@ def ban_user(request, user_id):
 
 @login_required
 def inbox(request):
-    if not getattr(request.user, 'is_verified_tenant', False) and not getattr(request.user, 'is_admin_user', False):
+    if not getattr(request.user, "is_verified_tenant", False) and not getattr(
+        request.user, "is_admin_user", False
+    ):
         messages.error(request, "Only verified tenants can access direct messages.")
-        return redirect('communities:index')
+        return redirect("communities:index")
 
     messages_qs = DirectMessage.objects.filter(
         Q(sender=request.user) | Q(receiver=request.user)
-    ).order_by('-created_at')
+    ).order_by("-created_at")
 
     users = set()
     latest_messages = []
-    
+
     for msg in messages_qs:
         other_user = msg.receiver if msg.sender == request.user else msg.sender
         if other_user not in users:
@@ -253,42 +255,49 @@ def inbox(request):
             latest_messages.append(msg)
 
     context = {
-        'conversations': latest_messages,
+        "conversations": latest_messages,
     }
-    return render(request, 'communities/inbox.html', context)
+    return render(request, "communities/inbox.html", context)
+
 
 @login_required
 def chat(request, user_id):
-    if not getattr(request.user, 'is_verified_tenant', False) and not getattr(request.user, 'is_admin_user', False):
+    if not getattr(request.user, "is_verified_tenant", False) and not getattr(
+        request.user, "is_admin_user", False
+    ):
         messages.error(request, "Only verified tenants can send or receive messages.")
-        return redirect('communities:index')
+        return redirect("communities:index")
 
     other_user = get_object_or_404(User, id=user_id)
-    if not getattr(other_user, 'is_verified_tenant', False) and not getattr(other_user, 'is_admin_user', False):
+    if not getattr(other_user, "is_verified_tenant", False) and not getattr(
+        other_user, "is_admin_user", False
+    ):
         messages.error(request, "You can only message verified tenants.")
-        return redirect('communities:inbox')
+        return redirect("communities:inbox")
 
-    DirectMessage.objects.filter(sender=other_user, receiver=request.user, is_read=False).update(is_read=True)
+    DirectMessage.objects.filter(
+        sender=other_user, receiver=request.user, is_read=False
+    ).update(is_read=True)
 
     messages_qs = DirectMessage.objects.filter(
-        Q(sender=request.user, receiver=other_user) | 
-        Q(sender=other_user, receiver=request.user)
-    ).order_by('created_at')
+        Q(sender=request.user, receiver=other_user)
+        | Q(sender=other_user, receiver=request.user)
+    ).order_by("created_at")
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form = DirectMessageForm(request.POST)
         if form.is_valid():
             msg = form.save(commit=False)
             msg.sender = request.user
             msg.receiver = other_user
             msg.save()
-            return redirect('communities:chat', user_id=other_user.id)
+            return redirect("communities:chat", user_id=other_user.id)
     else:
         form = DirectMessageForm()
 
     context = {
-        'other_user': other_user,
-        'chat_messages': messages_qs,
-        'form': form,
+        "other_user": other_user,
+        "chat_messages": messages_qs,
+        "form": form,
     }
-    return render(request, 'communities/chat.html', context)
+    return render(request, "communities/chat.html", context)

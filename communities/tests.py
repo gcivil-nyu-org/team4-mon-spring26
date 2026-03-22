@@ -179,12 +179,9 @@ class CommunitiesTests(TestCase):
             reported_by=self.public_user,
             reason="Spam",
         )
-        self.client.post(
-            reverse("communities:ban_user", args=[self.verified_user.id])
-        )
+        self.client.post(reverse("communities:ban_user", args=[self.verified_user.id]))
         self.verified_user.refresh_from_db()
         self.assertFalse(self.verified_user.is_active)
-
 
     def test_inbox_access(self):
         """Only verified tenants can access inbox."""
@@ -202,10 +199,12 @@ class CommunitiesTests(TestCase):
         # Send message
         response = self.client.post(
             reverse("communities:chat", args=[self.verified_user2.id]),
-            {"content": "Hello neighbor!"}
+            {"content": "Hello neighbor!"},
         )
-        self.assertRedirects(response, reverse("communities:chat", args=[self.verified_user2.id]))
-        
+        self.assertRedirects(
+            response, reverse("communities:chat", args=[self.verified_user2.id])
+        )
+
         # Check receiver inbox
         self.client.login(username="verified_bk01", password="password123")
         response = self.client.get(reverse("communities:inbox"))
