@@ -1,0 +1,50 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}{{ nta.nta_name }} Forum - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'communities:index' %}">Communities</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ nta.nta_name }}</li>
+            </ol>
+        </nav>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>{{ nta.nta_name }} Discussion Board</h2>
+            {% if can_post %}
+                <a href="{% url 'communities:create_post' nta.nta_code %}" class="btn btn-primary">Start a Discussion</a>
+            {% else %}
+                <button class="btn btn-secondary" disabled title="You must be a verified resident of {{ nta.nta_name }} to post.">Verified Residents Only</button>
+            {% endif %}
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="list-group list-group-flush">
+                {% for post in posts %}
+                    <a href="{% url 'communities:post_detail' nta.nta_code post.id %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">
+                                {% if post.is_pinned %}<span class="badge bg-warning text-dark me-1">Pinned</span>{% endif %}
+                                {{ post.title }}
+                            </h5>
+                            <small class="text-muted">{{ post.created_at|date:"M d, Y" }}</small>
+                        </div>
+                        <p class="mb-1 text-truncate">{{ post.content|truncatechars:100 }}</p>
+                        <small class="text-muted">By {{ post.author.username }} &bull; {{ post.comments.count }} replies</small>
+                    </a>
+                {% empty %}
+                    <div class="list-group-item p-4 text-center text-muted">
+                        <p class="mb-0">No discussions started yet for {{ nta.nta_name }}.</p>
+                        {% if can_post %}
+                            <p class="mt-2">Be the first to start an organizing thread!</p>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

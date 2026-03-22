@@ -1,0 +1,85 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}{{ post.title }} - {{ nta.nta_name }} - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'communities:index' %}">Communities</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'communities:nta_forum' nta.nta_code %}">{{ nta.nta_name }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ post.title|truncatechars:30 }}</li>
+            </ol>
+        </nav>
+
+        <div class="card shadow-sm mb-4 border-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="card-title mb-0">
+                        {% if post.is_pinned %}<span class="badge bg-warning text-dark me-2 fs-6 align-middle">Pinned</span>{% endif %}
+                        {{ post.title }}
+                    </h3>
+                    <a href="{% url 'communities:report_content' nta.nta_code %}?post_id={{ post.id }}" class="btn btn-sm btn-outline-danger" title="Report Post">
+                        <i class="bi bg-danger text-white rounded px-1 px-1">Report</i>
+                    </a>
+                </div>
+                
+                <h6 class="card-subtitle mb-3 text-muted border-bottom pb-2">
+                    Posted by <strong>{{ post.author.username }}</strong> 
+                    {% if post.author.is_verified_tenant %}
+                        <span class="badge bg-success ms-1">Verified Tenant</span>
+                    {% endif %}
+                    on {{ post.created_at|date:"F d, Y P" }}
+                </h6>
+                
+                <p class="card-text" style="white-space: pre-wrap;">{{ post.content }}</p>
+            </div>
+        </div>
+
+        <h4 class="mb-3">Replies ({{ comments.count }})</h4>
+
+        {% for comment in comments %}
+            <div class="card shadow-sm mb-3">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between">
+                        <h6 class="card-subtitle text-muted mb-2">
+                            <strong>{{ comment.author.username }}</strong>
+                            {% if comment.author.is_verified_tenant %}
+                                <span class="badge bg-success ms-1">Verified Tenant</span>
+                            {% endif %}
+                            &bull; <small>{{ comment.created_at|timesince }} ago</small>
+                        </h6>
+                        <a href="{% url 'communities:report_content' nta.nta_code %}?comment_id={{ comment.id }}" class="text-danger small text-decoration-none">Report</a>
+                    </div>
+                    <p class="card-text mb-0" style="white-space: pre-wrap;">{{ comment.content }}</p>
+                </div>
+            </div>
+        {% empty %}
+            <p class="text-muted fst-italic">No replies yet. Be the first to comment!</p>
+        {% endfor %}
+
+        <div class="card mt-4 bg-light shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Leave a Reply</h5>
+                {% if can_post %}
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ form.content }}
+                            {% for error in form.content.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <button type="submit" class="btn btn-primary">Post Reply</button>
+                    </form>
+                {% else %}
+                    <div class="alert alert-secondary mb-0">
+                        You must be a verified resident of {{ nta.nta_name }} to post a reply.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

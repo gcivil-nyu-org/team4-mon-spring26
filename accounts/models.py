@@ -58,6 +58,18 @@ class User(AbstractUser):
         )
         return approved.address if approved else None
 
+    @property
+    def verified_nta_code(self):
+        """Return the nta_code from the most recent approved verification."""
+        approved = (
+            self.verification_requests.filter(
+                status=VerificationRequest.STATUS_APPROVED
+            )
+            .order_by("-reviewed_at")
+            .first()
+        )
+        return approved.nta_code if approved else None
+
 
 class VerificationRequest(models.Model):
     """
