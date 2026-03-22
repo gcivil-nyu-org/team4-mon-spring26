@@ -4,7 +4,6 @@ from django.urls import reverse
 
 from .models import User, VerificationRequest
 
-
 # ============================================================ #
 #  User Model
 # ============================================================ #
