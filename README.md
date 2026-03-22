@@ -41,6 +41,55 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+## Deploy to AWS Elastic Beanstalk (Production)
+
+### 1) Prerequisites
+
+- AWS account with permissions for Elastic Beanstalk, EC2, S3, CloudWatch, and RDS
+- AWS CLI + EB CLI installed and configured
+- Python virtual environment active
+
+### 2) Create PostgreSQL (RDS)
+
+Create an RDS PostgreSQL instance in the same VPC/security context as your Elastic Beanstalk environment.
+
+Collect its connection details and build:
+
+`DATABASE_URL=postgres://USERNAME:PASSWORD@HOST:5432/DBNAME`
+
+### 3) Initialize and create Elastic Beanstalk environment
+
+```bash
+eb init
+eb create tenantguard-prod
+```
+
+### 4) Set production environment variables
+
+```bash
+eb setenv \
+DJANGO_SECRET_KEY="<strong-secret>" \
+DEBUG=False \
+ALLOWED_HOSTS="<your-eb-domain>,<your-custom-domain>" \
+CSRF_TRUSTED_ORIGINS="https://<your-eb-domain>,https://<your-custom-domain>" \
+DATABASE_URL="postgres://USERNAME:PASSWORD@HOST:5432/DBNAME" \
+DB_SSL_REQUIRE=True
+```
+
+### 5) Deploy
+
+```bash
+eb deploy
+eb open
+```
+
+### Notes
+
+- `Procfile` runs Gunicorn for Django.
+- `.ebextensions/01_django.config` runs `migrate` and `collectstatic` automatically on deploy.
+- `.ebextensions/02_staticfiles.config` maps `/static` for serving collected static assets.
+- For production media uploads, prefer S3 (instance-local media is ephemeral).
+
 ## Streamlit Demo (Live Link Ready)
 
 You can deploy a shareable live demo with Streamlit Community Cloud using the existing processed GeoJSON files.
