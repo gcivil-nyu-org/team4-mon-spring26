@@ -1,5 +1,5 @@
 from django import forms
-from .models import Post, Comment, Report
+from .models import Post, Comment, Report, DirectMessage
 
 
 class PostForm(forms.ModelForm):
@@ -45,6 +45,20 @@ class ReportForm(forms.ModelForm):
                     "class": "form-control",
                     "rows": 3,
                     "placeholder": "Please provide the reason for reporting this content.",
+                }
+            ),
+        }
+
+class DirectMessageForm(forms.ModelForm):
+    class Meta:
+        model = DirectMessage
+        fields = ["content"]
+        widgets = {
+            "content": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                    "placeholder": "Type your message...",
                 }
             ),
         }

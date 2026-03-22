@@ -47,12 +47,37 @@ class Comment(models.Model):
         return f"Comment by {self.author.username} on {self.post.title}"
 
 
+class DirectMessage(models.Model):
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_messages",
+    )
+    receiver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_messages",
+    )
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Message from {self.sender.username} to {self.receiver.username}"
+
+
 class Report(models.Model):
     post = models.ForeignKey(
         Post, on_delete=models.CASCADE, null=True, blank=True, related_name="reports"
     )
     comment = models.ForeignKey(
         Comment, on_delete=models.CASCADE, null=True, blank=True, related_name="reports"
+    )
+    message = models.ForeignKey(
+        DirectMessage, on_delete=models.CASCADE, null=True, blank=True, related_name="reports"
     )
     reported_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -78,6 +103,8 @@ class Report(models.Model):
             target = f"Post: {self.post.title}"
         elif self.comment:
             target = f"Comment: {self.comment.id}"
+        elif self.message:
+            target = f"Message: {self.message.id}"
         elif self.reported_user:
             target = f"User: {self.reported_user.username}"
         else:
