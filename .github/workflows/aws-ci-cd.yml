@@ -42,8 +42,8 @@ jobs:
   deploy-to-aws:
     needs: integrate-and-test
     runs-on: ubuntu-latest
-    # Only deploy when pushing to the main branch
-    if: github.ref == 'refs/heads/main'
+    # Deploy when pushing/merging to develop OR main
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     
     steps:
       - name: Checkout Code
