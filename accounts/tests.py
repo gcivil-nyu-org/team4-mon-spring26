@@ -1,4 +1,3 @@
-from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -103,7 +102,7 @@ class VerificationRequestModelTests(TestCase):
         self.assertIn("456 Elm St", str(vr))
 
     def test_ordering(self):
-        vr1 = VerificationRequest.objects.create(user=self.user, address="A", document_type="lease")
+        VerificationRequest.objects.create(user=self.user, address="A", document_type="lease")
         vr2 = VerificationRequest.objects.create(user=self.user, address="B", document_type="lease")
         first = VerificationRequest.objects.first()
         self.assertEqual(first.pk, vr2.pk)
@@ -591,7 +590,7 @@ class AdminVerificationReviewViewTests(TestCase):
         self.assertEqual(self.applicant.role, User.ROLE_PUBLIC)  # role unchanged
 
     def test_public_user_cannot_review(self):
-        public = User.objects.create_user(username="pub", password="StrongPass99!")
+        User.objects.create_user(username="pub", password="StrongPass99!")
         self.client.login(username="pub", password="StrongPass99!")
         response = self.client.get(reverse("admin-verification-review", args=[self.vr.pk]))
         self.assertEqual(response.status_code, 403)
@@ -609,7 +608,7 @@ class AdminVerificationReviewViewTests(TestCase):
 
 class VerifiedBadgeTests(TestCase):
     def test_nav_shows_verified_badge(self):
-        user = User.objects.create_user(
+        User.objects.create_user(
             username="vuser", password="StrongPass99!", role=User.ROLE_VERIFIED_TENANT
         )
         self.client.login(username="vuser", password="StrongPass99!")

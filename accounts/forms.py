@@ -10,13 +10,30 @@ MAX_DOCUMENT_SIZE_MB = 10
 
 
 class RegistrationForm(UserCreationForm):
-    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={"placeholder": "Email"}))
-    first_name = forms.CharField(max_length=30, required=True, widget=forms.TextInput(attrs={"placeholder": "First name"}))
-    last_name = forms.CharField(max_length=30, required=True, widget=forms.TextInput(attrs={"placeholder": "Last name"}))
+    email = forms.EmailField(
+        required=True, widget=forms.EmailInput(attrs={"placeholder": "Email"})
+    )
+    first_name = forms.CharField(
+        max_length=30,
+        required=True,
+        widget=forms.TextInput(attrs={"placeholder": "First name"}),
+    )
+    last_name = forms.CharField(
+        max_length=30,
+        required=True,
+        widget=forms.TextInput(attrs={"placeholder": "Last name"}),
+    )
 
     class Meta:
         model = User
-        fields = ["username", "email", "first_name", "last_name", "password1", "password2"]
+        fields = [
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "password1",
+            "password2",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -30,7 +47,9 @@ class ProfileForm(forms.ModelForm):
         model = User
         fields = ["first_name", "last_name", "email", "phone_number", "bio"]
         widgets = {
-            "bio": forms.Textarea(attrs={"rows": 3, "placeholder": "Tell us about yourself..."}),
+            "bio": forms.Textarea(
+                attrs={"rows": 3, "placeholder": "Tell us about yourself..."}
+            ),
             "phone_number": forms.TextInput(attrs={"placeholder": "Phone number"}),
         }
 
@@ -40,11 +59,20 @@ class VerificationRequestForm(forms.ModelForm):
 
     class Meta:
         model = VerificationRequest
-        fields = ["address", "borough", "zip_code", "document_type", "document", "document_description"]
+        fields = [
+            "address",
+            "borough",
+            "zip_code",
+            "document_type",
+            "document",
+            "document_description",
+        ]
         widgets = {
-            "address": forms.TextInput(attrs={
-                "placeholder": "e.g. 123 Main St, Apt 4B, New York, NY 10001",
-            }),
+            "address": forms.TextInput(
+                attrs={
+                    "placeholder": "e.g. 123 Main St, Apt 4B, New York, NY 10001",
+                }
+            ),
             "borough": forms.Select(
                 choices=[
                     ("", "Select borough"),
@@ -57,13 +85,17 @@ class VerificationRequestForm(forms.ModelForm):
             ),
             "zip_code": forms.TextInput(attrs={"placeholder": "10001"}),
             "document_type": forms.Select(),
-            "document": forms.ClearableFileInput(attrs={
-                "accept": ".pdf,.jpg,.jpeg,.png",
-            }),
-            "document_description": forms.Textarea(attrs={
-                "rows": 3,
-                "placeholder": "Describe your proof document — e.g. 'Con Edison bill dated Feb 2026 in my name'",
-            }),
+            "document": forms.ClearableFileInput(
+                attrs={
+                    "accept": ".pdf,.jpg,.jpeg,.png",
+                }
+            ),
+            "document_description": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "placeholder": "Describe your proof document — e.g. 'Con Edison bill dated Feb 2026 in my name'",
+                }
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -110,8 +142,10 @@ class AdminVerificationReviewForm(forms.Form):
     action = forms.ChoiceField(choices=ACTION_CHOICES, widget=forms.HiddenInput())
     admin_notes = forms.CharField(
         required=False,
-        widget=forms.Textarea(attrs={
-            "rows": 3,
-            "placeholder": "Notes to the applicant (optional)…",
-        }),
+        widget=forms.Textarea(
+            attrs={
+                "rows": 3,
+                "placeholder": "Notes to the applicant (optional)…",
+            }
+        ),
     )

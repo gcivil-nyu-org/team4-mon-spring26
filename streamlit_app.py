@@ -5,7 +5,6 @@ from typing import Any
 import pydeck as pdk
 import streamlit as st
 
-
 BASE_DIR = Path(__file__).resolve().parent
 BOUNDARY_FILES = {
     "NTA": BASE_DIR / "data" / "processed" / "nyc_nta_phase1.geojson",
@@ -62,9 +61,13 @@ def load_boundary_geojson(path: Path) -> dict[str, Any]:
 def main() -> None:
     st.set_page_config(page_title="TenantGuard NYC Demo", layout="wide")
     st.title("TenantGuard NYC Livability Demo")
-    st.caption("Interactive demo powered by Streamlit and your preprocessed NYC boundary GeoJSON data.")
+    st.caption(
+        "Interactive demo powered by Streamlit and your preprocessed NYC boundary GeoJSON data."
+    )
 
-    selected_level = st.sidebar.selectbox("Boundary detail level", list(BOUNDARY_FILES.keys()), index=0)
+    selected_level = st.sidebar.selectbox(
+        "Boundary detail level", list(BOUNDARY_FILES.keys()), index=0
+    )
     boundary_path = BOUNDARY_FILES[selected_level]
 
     if not boundary_path.exists():
@@ -85,7 +88,9 @@ def main() -> None:
             if f.get("properties", {}).get("borough")
         }
     )
-    selected_borough = st.sidebar.selectbox("Filter borough", ["All"] + boroughs, index=0)
+    selected_borough = st.sidebar.selectbox(
+        "Filter borough", ["All"] + boroughs, index=0
+    )
 
     if selected_borough == "All":
         filtered_features = features
@@ -103,7 +108,11 @@ def main() -> None:
     names = sorted({feature_label(feature) for feature in filtered_features})
     selected_name = st.selectbox("Select area for details", names, index=0)
     selected_feature = next(
-        (feature for feature in filtered_features if feature_label(feature) == selected_name),
+        (
+            feature
+            for feature in filtered_features
+            if feature_label(feature) == selected_name
+        ),
         filtered_features[0],
     )
     props = selected_feature.get("properties", {})
@@ -127,13 +136,17 @@ def main() -> None:
 
     col_map, col_info = st.columns([3, 2])
     with col_map:
-        st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=NYC_VIEW, tooltip=tooltip))
+        st.pydeck_chart(
+            pdk.Deck(layers=[layer], initial_view_state=NYC_VIEW, tooltip=tooltip)
+        )
 
     with col_info:
         st.subheader(selected_name)
         st.write(f"**Borough:** {props.get('borough', 'N/A')}")
         score = parse_score(props.get("placeholder_score"))
-        st.write(f"**Livability Score:** {f'{score:.1f} / 10' if score is not None else 'N/A'}")
+        st.write(
+            f"**Livability Score:** {f'{score:.1f} / 10' if score is not None else 'N/A'}"
+        )
         summary = props.get("placeholder_summary", "No summary provided.")
         st.write(summary)
 

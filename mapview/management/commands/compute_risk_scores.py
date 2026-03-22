@@ -18,7 +18,9 @@ from django.db.models import Count
 
 from mapview.models import Complaint311, HPDViolation, NTARiskScore
 
-NTA_GEOJSON_PATH = Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
+NTA_GEOJSON_PATH = (
+    Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
+)
 
 
 class Command(BaseCommand):
@@ -30,7 +32,11 @@ class Command(BaseCommand):
             with NTA_GEOJSON_PATH.open("r", encoding="utf-8") as fh:
                 nta_data = json.load(fh)
         except FileNotFoundError:
-            self.stderr.write(self.style.ERROR("NTA GeoJSON not found. Run prepare_nta_geojson first."))
+            self.stderr.write(
+                self.style.ERROR(
+                    "NTA GeoJSON not found. Run prepare_nta_geojson first."
+                )
+            )
             return
 
         nta_lookup = {}
@@ -73,7 +79,9 @@ class Command(BaseCommand):
             if weighted == 0:
                 risk_score = 10.0
             else:
-                risk_score = round(max(0.0, min(10.0, 10.0 - math.log1p(weighted) * 1.2)), 1)
+                risk_score = round(
+                    max(0.0, min(10.0, 10.0 - math.log1p(weighted) * 1.2)), 1
+                )
 
             # Human-readable summary
             if risk_score <= 3.0:
@@ -109,7 +117,9 @@ class Command(BaseCommand):
             )
             scored += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Computed risk scores for {scored} NTA neighbourhoods."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Computed risk scores for {scored} NTA neighbourhoods.")
+        )
 
     # ---------------------------------------------------------------------- #
     def _assign_nta_codes(self, nta_data):
@@ -119,7 +129,9 @@ class Command(BaseCommand):
             from shapely.strtree import STRtree
         except ImportError:
             self.stderr.write(
-                self.style.WARNING("shapely not installed — skipping spatial NTA assignment.")
+                self.style.WARNING(
+                    "shapely not installed — skipping spatial NTA assignment."
+                )
             )
             return
 
@@ -134,7 +146,9 @@ class Command(BaseCommand):
         tree = STRtree(nta_geoms)
 
         # -- violations
-        unassigned_v = HPDViolation.objects.filter(nta_code="", latitude__isnull=False, longitude__isnull=False)
+        unassigned_v = HPDViolation.objects.filter(
+            nta_code="", latitude__isnull=False, longitude__isnull=False
+        )
         v_assigned = 0
         for v in unassigned_v.iterator(chunk_size=2000):
             pt = Point(v.longitude, v.latitude)
@@ -147,7 +161,9 @@ class Command(BaseCommand):
         self.stdout.write(f"  NTA-tagged {v_assigned} violations.")
 
         # -- complaints
-        unassigned_c = Complaint311.objects.filter(nta_code="", latitude__isnull=False, longitude__isnull=False)
+        unassigned_c = Complaint311.objects.filter(
+            nta_code="", latitude__isnull=False, longitude__isnull=False
+        )
         c_assigned = 0
         for c in unassigned_c.iterator(chunk_size=2000):
             pt = Point(c.longitude, c.latitude)

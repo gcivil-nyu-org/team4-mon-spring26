@@ -4,7 +4,6 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -15,7 +14,6 @@ from .forms import (
     VerificationRequestForm,
 )
 from .models import User, VerificationRequest
-
 
 # ------------------------------------------------------------------ #
 #  Permission decorators
@@ -62,7 +60,9 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            messages.success(request, "Account created successfully! Welcome to TenantGuard NYC.")
+            messages.success(
+                request, "Account created successfully! Welcome to TenantGuard NYC."
+            )
             return redirect("dashboard")
     else:
         form = RegistrationForm()
@@ -151,9 +151,13 @@ def admin_verification_queue_view(request):
     if status_filter == "all":
         qs = VerificationRequest.objects.select_related("user").all()
     elif status_filter in ("approved", "rejected"):
-        qs = VerificationRequest.objects.select_related("user").filter(status=status_filter)
+        qs = VerificationRequest.objects.select_related("user").filter(
+            status=status_filter
+        )
     else:
-        qs = VerificationRequest.objects.select_related("user").filter(status=VerificationRequest.STATUS_PENDING)
+        qs = VerificationRequest.objects.select_related("user").filter(
+            status=VerificationRequest.STATUS_PENDING
+        )
         status_filter = "pending"
 
     return render(
@@ -184,11 +188,16 @@ def admin_verification_review_view(request, pk):
                 vr.user.role = User.ROLE_VERIFIED_TENANT
                 vr.user.save(update_fields=["role"])
                 vr.save()
-                messages.success(request, f"✅ {vr.user.username} has been verified as a tenant.")
+                messages.success(
+                    request, f"✅ {vr.user.username} has been verified as a tenant."
+                )
             else:
                 vr.status = VerificationRequest.STATUS_REJECTED
                 vr.save()
-                messages.warning(request, f"❌ Verification request for {vr.user.username} was rejected.")
+                messages.warning(
+                    request,
+                    f"❌ Verification request for {vr.user.username} was rejected.",
+                )
 
             return redirect("admin-verification-queue")
     else:
