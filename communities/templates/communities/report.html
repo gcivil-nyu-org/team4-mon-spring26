@@ -11,13 +11,15 @@
             </div>
             <div class="card-body">
                 <div class="alert alert-warning">
-                    <strong>You are reporting the following content:</strong><br>
+                    <strong>You are reporting the following:</strong><br>
                     {% if post %}
                         <em>Post Title:</em> {{ post.title }}<br>
                         <em>By:</em> {{ post.author.username }}
                     {% elif comment %}
                         <em>Comment snippet:</em> "{{ comment.content|truncatechars:100 }}"<br>
                         <em>By:</em> {{ comment.author.username }}
+                    {% elif reported_user %}
+                        <em>User Profile:</em> {{ reported_user.username }}
                     {% endif %}
                 </div>
 

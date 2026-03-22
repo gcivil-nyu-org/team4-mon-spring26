@@ -54,6 +54,13 @@ class Report(models.Model):
     comment = models.ForeignKey(
         Comment, on_delete=models.CASCADE, null=True, blank=True, related_name="reports"
     )
+    reported_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reports_against",
+    )
     reported_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -67,7 +74,13 @@ class Report(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        target = (
-            f"Post: {self.post.title}" if self.post else f"Comment: {self.comment.id}"
-        )
+        if self.post:
+            target = f"Post: {self.post.title}"
+        elif self.comment:
+            target = f"Comment: {self.comment.id}"
+        elif self.reported_user:
+            target = f"User: {self.reported_user.username}"
+        else:
+            target = "Unknown"
+
         return f"Report on {target} by {self.reported_by.username}"

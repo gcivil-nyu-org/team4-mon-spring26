@@ -27,10 +27,11 @@
                 
                 <h6 class="card-subtitle mb-3 text-muted border-bottom pb-2">
                     Posted by <strong>{{ post.author.username }}</strong> 
+                    <a href="{% url 'communities:report_content' nta.nta_code %}?user_id={{ post.author.id }}" class="text-danger small ms-2 text-decoration-none border rounded px-1" title="Report this User">Report User</a>
                     {% if post.author.is_verified_tenant %}
                         <span class="badge bg-success ms-1">Verified Tenant</span>
                     {% endif %}
-                    on {{ post.created_at|date:"F d, Y P" }}
+                    <br><small class="text-muted">on {{ post.created_at|date:"F d, Y P" }}</small>
                 </h6>
                 
                 <p class="card-text" style="white-space: pre-wrap;">{{ post.content }}</p>
@@ -45,12 +46,13 @@
                     <div class="d-flex justify-content-between">
                         <h6 class="card-subtitle text-muted mb-2">
                             <strong>{{ comment.author.username }}</strong>
+                            <a href="{% url 'communities:report_content' nta.nta_code %}?user_id={{ comment.author.id }}" class="text-danger small ms-1 text-decoration-none border rounded px-1" title="Report this User">Report User</a>
                             {% if comment.author.is_verified_tenant %}
                                 <span class="badge bg-success ms-1">Verified Tenant</span>
                             {% endif %}
                             &bull; <small>{{ comment.created_at|timesince }} ago</small>
                         </h6>
-                        <a href="{% url 'communities:report_content' nta.nta_code %}?comment_id={{ comment.id }}" class="text-danger small text-decoration-none">Report</a>
+                        <a href="{% url 'communities:report_content' nta.nta_code %}?comment_id={{ comment.id }}" class="text-danger small text-decoration-none">Report Comment</a>
                     </div>
                     <p class="card-text mb-0" style="white-space: pre-wrap;">{{ comment.content }}</p>
                 </div>

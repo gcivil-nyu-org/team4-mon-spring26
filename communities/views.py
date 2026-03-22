@@ -1,11 +1,14 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.contrib.auth import get_user_model
 
 from mapview.models import NTARiskScore
-from .models import Post, Comment
+from .models import Post, Comment, Report
 from .forms import PostForm, CommentForm, ReportForm
+
+User = get_user_model()
 
 
 def is_verified_for_nta(user, nta_code):
@@ -110,16 +113,22 @@ def report_content(request, nta_code):
     nta = get_object_or_404(NTARiskScore, nta_code=nta_code)
     post_id = request.GET.get("post_id")
     comment_id = request.GET.get("comment_id")
+    user_id = request.GET.get("user_id")
 
     post = None
     comment = None
+    reported_user = None
 
     if post_id:
         post = get_object_or_404(Post, id=post_id, nta=nta)
     elif comment_id:
         comment = get_object_or_404(Comment, id=comment_id, post__nta=nta)
+    elif user_id:
+        reported_user = get_object_or_404(User, id=user_id)
     else:
-        raise PermissionDenied("Must provide post_id or comment_id to report.")
+        raise PermissionDenied(
+            "Must provide post_id, comment_id, or user_id to report."
+        )
 
     if request.method == "POST":
         form = ReportForm(request.POST)
@@ -130,16 +139,24 @@ def report_content(request, nta_code):
                 report.post = post
             if comment:
                 report.comment = comment
+            if reported_user:
+                report.reported_user = reported_user
             report.save()
 
             messages.success(request, "Report submitted successfully to admins.")
             # Redirect back to the context
-            redirect_post_id = post.id if post else comment.post.id
-            return redirect(
-                "communities:post_detail",
-                nta_code=nta.nta_code,
-                post_id=redirect_post_id,
-            )
+            if post:
+                return redirect(
+                    "communities:post_detail", nta_code=nta.nta_code, post_id=post.id
+                )
+            elif comment:
+                return redirect(
+                    "communities:post_detail",
+                    nta_code=nta.nta_code,
+                    post_id=comment.post.id,
+                )
+            else:
+                return redirect("communities:nta_forum", nta_code=nta.nta_code)
     else:
         form = ReportForm()
 
@@ -148,5 +165,68 @@ def report_content(request, nta_code):
         "form": form,
         "post": post,
         "comment": comment,
+        "reported_user": reported_user,
     }
     return render(request, "communities/report.html", context)
+
+
+@user_passes_test(
+    lambda u: u.is_authenticated
+    and (u.is_staff or u.is_superuser or getattr(u, "is_admin_user", False))
+)
+def moderation_queue(request):
+    reports = Report.objects.filter(resolved=False).select_related(
+        "post", "comment", "reported_user", "reported_by"
+    )
+    context = {"reports": reports}
+    return render(request, "communities/moderation_queue.html", context)
+
+
+@user_passes_test(
+    lambda u: u.is_authenticated
+    and (u.is_staff or u.is_superuser or getattr(u, "is_admin_user", False))
+)
+def resolve_report(request, report_id):
+    report = get_object_or_404(Report, id=report_id)
+    report.resolved = True
+    report.save()
+    messages.success(request, f"Report #{report.id} marked as resolved.")
+    return redirect("communities:moderation_queue")
+
+
+@user_passes_test(
+    lambda u: u.is_authenticated
+    and (u.is_staff or u.is_superuser or getattr(u, "is_admin_user", False))
+)
+def delete_reported_content(request, report_id):
+    report = get_object_or_404(Report, id=report_id)
+    if report.post:
+        report.post.delete()
+        messages.success(request, "Reported post has been deleted.")
+    elif report.comment:
+        report.comment.delete()
+        messages.success(request, "Reported comment has been deleted.")
+
+    report.resolved = True
+    report.save()
+    return redirect("communities:moderation_queue")
+
+
+@user_passes_test(
+    lambda u: u.is_authenticated
+    and (u.is_staff or u.is_superuser or getattr(u, "is_admin_user", False))
+)
+def ban_user(request, user_id):
+    user_to_ban = get_object_or_404(User, id=user_id)
+    user_to_ban.is_active = False
+    user_to_ban.save()
+    messages.success(
+        request, f"User {user_to_ban.username} has been banned (deactivated)."
+    )
+
+    # Resolve all outstanding reports against this user
+    Report.objects.filter(reported_user=user_to_ban, resolved=False).update(
+        resolved=True
+    )
+
+    return redirect("communities:moderation_queue")

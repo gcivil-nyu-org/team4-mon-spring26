@@ -153,3 +153,34 @@ class CommunitiesTests(TestCase):
             reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
         )
         self.assertTrue(Report.objects.filter(reason="Spam post").exists())
+
+    def test_report_user(self):
+        self.client.login(username="public", password="password123")
+        self.client.post(
+            reverse("communities:report_content", args=[self.nta.nta_code])
+            + f"?user_id={self.verified_user.id}",
+            {"reason": "Suspicious"},
+        )
+        self.assertTrue(
+            Report.objects.filter(reported_user=self.verified_user).exists()
+        )
+
+    def test_moderation_queue(self):
+        User.objects.create_superuser(username="admin1", password="password123")
+        self.client.login(username="admin1", password="password123")
+        response = self.client.get(reverse("communities:moderation_queue"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_ban_user(self):
+        User.objects.create_superuser(username="admin2", password="password123")
+        self.client.login(username="admin2", password="password123")
+        Report.objects.create(
+            reported_user=self.verified_user,
+            reported_by=self.public_user,
+            reason="Spam",
+        )
+        self.client.post(
+            reverse("communities:ban_user", args=[self.verified_user.id])
+        )
+        self.verified_user.refresh_from_db()
+        self.assertFalse(self.verified_user.is_active)
