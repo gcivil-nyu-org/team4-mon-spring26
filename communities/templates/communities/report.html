@@ -1,0 +1,51 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}Report Content - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card shadow-sm border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Report Content to Moderators</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <strong>You are reporting the following:</strong><br>
+                    {% if post %}
+                        <em>Post Title:</em> {{ post.title }}<br>
+                        <em>By:</em> {{ post.author.username }}
+                    {% elif comment %}
+                        <em>Comment snippet:</em> "{{ comment.content|truncatechars:100 }}"<br>
+                        <em>By:</em> {{ comment.author.username }}
+                    {% elif reported_user %}
+                        <em>User Profile:</em> {{ reported_user.username }}
+                    {% endif %}
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %}
+                    
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label fw-bold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% for error in field.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" class="btn btn-secondary" onclick="history.back()">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Submit Report</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
