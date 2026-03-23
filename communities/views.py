@@ -203,9 +203,11 @@ def delete_reported_content(request, report_id):
     report = get_object_or_404(Report, id=report_id)
     if report.post:
         report.post.delete()
+        report.post = None
         messages.success(request, "Reported post has been deleted.")
     elif report.comment:
         report.comment.delete()
+        report.comment = None
         messages.success(request, "Reported comment has been deleted.")
 
     report.resolved = True

@@ -3,48 +3,43 @@
 {% block title %}{{ nta.nta_name }} Forum - TenantGuard{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-10 offset-md-1">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'communities:index' %}">Communities</a></li>
-                <li class="breadcrumb-item active" aria-current="page">{{ nta.nta_name }}</li>
-            </ol>
-        </nav>
-
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>{{ nta.nta_name }} Discussion Board</h2>
-            {% if can_post %}
-                <a href="{% url 'communities:create_post' nta.nta_code %}" class="btn btn-primary">Start a Discussion</a>
-            {% else %}
-                <button class="btn btn-secondary" disabled title="You must be a verified resident of {{ nta.nta_name }} to post.">Verified Residents Only</button>
-            {% endif %}
-        </div>
-
-        <div class="card shadow-sm">
-            <div class="list-group list-group-flush">
-                {% for post in posts %}
-                    <a href="{% url 'communities:post_detail' nta.nta_code post.id %}" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h5 class="mb-1">
-                                {% if post.is_pinned %}<span class="badge bg-warning text-dark me-1">Pinned</span>{% endif %}
-                                {{ post.title }}
-                            </h5>
-                            <small class="text-muted">{{ post.created_at|date:"M d, Y" }}</small>
-                        </div>
-                        <p class="mb-1 text-truncate">{{ post.content|truncatechars:100 }}</p>
-                        <small class="text-muted">By {{ post.author.username }} &bull; {{ post.comments.count }} replies</small>
-                    </a>
-                {% empty %}
-                    <div class="list-group-item p-4 text-center text-muted">
-                        <p class="mb-0">No discussions started yet for {{ nta.nta_name }}.</p>
-                        {% if can_post %}
-                            <p class="mt-2">Be the first to start an organizing thread!</p>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
+<div class="community-container">
+  <div class="community-card">
+    <div class="breadcrumb">
+      <a href="{% url 'communities:index' %}">Communities</a>
+      <span class="sep">/</span>
+      <span>{{ nta.nta_name }}</span>
     </div>
+
+    <div class="forum-header">
+      <h2>{{ nta.nta_name }} Discussion Board</h2>
+      {% if can_post %}
+        <a href="{% url 'communities:create_post' nta.nta_code %}" class="btn btn-primary btn-sm">Start a Discussion</a>
+      {% else %}
+        <button class="btn btn-secondary btn-sm" disabled title="You must be a verified resident of {{ nta.nta_name }} to post.">Verified Residents Only</button>
+      {% endif %}
+    </div>
+
+    <div class="community-list" style="border-top:1px solid #e2e8f0;border-radius:0.4rem;">
+      {% for post in posts %}
+        <a href="{% url 'communities:post_detail' nta.nta_code post.id %}" class="post-card">
+          <div class="post-card-top">
+            <h3>
+              {% if post.is_pinned %}<span class="pinned-badge">Pinned</span>{% endif %}
+              {{ post.title }}
+            </h3>
+            <span style="font-size:0.72rem;color:#64748b;white-space:nowrap;">{{ post.created_at|date:"M d, Y" }}</span>
+          </div>
+          <p class="preview">{{ post.content|truncatechars:100 }}</p>
+          <p class="meta">By {{ post.author.username }} · {{ post.comments.count }} replies</p>
+        </a>
+      {% empty %}
+        <div class="community-empty">
+          <p>No discussions started yet for {{ nta.nta_name }}.</p>
+          {% if can_post %}<p>Be the first to start an organizing thread!</p>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
 </div>
 {% endblock %}

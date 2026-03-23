@@ -3,29 +3,22 @@
 {% block title %}Area-Based Communities - TenantGuard{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8 offset-md-2">
-        <h2 class="mb-4">Area-Based Communities</h2>
-        <p class="lead">Connect with verified tenants in your neighborhood to discuss local housing issues and organize collective action.</p>
-        
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Neighborhood Forums</h5>
-            </div>
-            <div class="card-body">
-                <p>Select a neighborhood to view past discussions:</p>
-                <div class="list-group">
-                    {% for nta in ntas %}
-                        <a href="{% url 'communities:nta_forum' nta.nta_code %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            {{ nta.nta_name }} ({{ nta.borough }})
-                            <span class="badge bg-secondary rounded-pill">{{ nta.posts.count }} posts</span>
-                        </a>
-                    {% empty %}
-                        <div class="list-group-item">No neighborhoods available yet.</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
+<div class="community-container">
+  <div class="community-card">
+    <h2>Area-Based Communities</h2>
+    <p class="lead">Connect with verified tenants in your neighborhood to discuss local housing issues and organize collective action.</p>
+
+    <h5 class="community-section-header">Neighborhood Forums</h5>
+    <div class="community-list">
+      {% for nta in ntas %}
+        <a href="{% url 'communities:nta_forum' nta.nta_code %}" class="community-list-item">
+          {{ nta.nta_name }} ({{ nta.borough }})
+          <span class="count-badge">{{ nta.posts.count }} posts</span>
+        </a>
+      {% empty %}
+        <div class="community-empty">No neighborhoods available yet.</div>
+      {% endfor %}
     </div>
+  </div>
 </div>
 {% endblock %}

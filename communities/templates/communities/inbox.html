@@ -1,44 +1,50 @@
 {% extends "base.html" %}
 
+{% block title %}Inbox - TenantGuard NYC{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-md-8 mx-auto">
-        <h2 class="mb-4">Inbox</h2>
-        
-        {% if conversations %}
-            <div class="list-group">
-                {% for msg in conversations %}
-                    {% if msg.sender == user %}
-                        {% with other_user=msg.receiver %}
-                        <a href="{% url 'communities:chat' user_id=other_user.id %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        {% endwith %}
-                    {% else %}
-                        {% with other_user=msg.sender %}
-                        <a href="{% url 'communities:chat' user_id=other_user.id %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        {% endwith %}
-                    {% endif %}
-                        <div>
-                            <h5 class="mb-1">
-                                {% if msg.sender == user %}
-                                    To: {{ msg.receiver.username }}
-                                {% else %}
-                                    From: {{ msg.sender.username }}
-                                {% endif %}
-                            </h5>
-                            <p class="mb-1 text-muted">{{ msg.content|truncatewords:10 }}</p>
-                            <small class="text-muted">{{ msg.created_at|date:"M d, Y H:i" }}</small>
-                        </div>
-                        {% if msg.receiver == user and not msg.is_read %}
-                            <span class="badge bg-primary rounded-pill">New</span>
-                        {% endif %}
-                    </a>
-                {% endfor %}
+<div class="chat-container">
+  <div class="chat-card">
+    <h2 style="margin:0 0 1rem;font-size:1.3rem;">Inbox</h2>
+
+    {% if conversations %}
+    <div class="community-list" style="border:1px solid #e2e8f0;border-radius:0.4rem;">
+      {% for msg in conversations %}
+        {% if msg.sender == user %}
+          {% with other_user=msg.receiver %}
+          <a href="{% url 'communities:chat' user_id=other_user.id %}" class="inbox-item">
+            <div>
+              <h4>To: {{ msg.receiver.username }}</h4>
+              <p class="preview">{{ msg.content|truncatewords:10 }}</p>
+              <span class="time">{{ msg.created_at|date:"M d, Y H:i" }}</span>
             </div>
+          </a>
+          {% endwith %}
         {% else %}
-            <div class="alert alert-info">
-                No conversations yet. You can message verified tenants from their profile or posts.
+          {% with other_user=msg.sender %}
+          <a href="{% url 'communities:chat' user_id=other_user.id %}" class="inbox-item">
+            <div>
+              <h4>From: {{ msg.sender.username }}</h4>
+              <p class="preview">{{ msg.content|truncatewords:10 }}</p>
+              <span class="time">{{ msg.created_at|date:"M d, Y H:i" }}</span>
             </div>
+            {% if msg.receiver == user and not msg.is_read %}
+              <span class="new-badge">New</span>
+            {% endif %}
+          </a>
+          {% endwith %}
         {% endif %}
+      {% endfor %}
     </div>
+    {% else %}
+    <div class="community-empty">
+      <p>No conversations yet. You can message verified tenants from their posts.</p>
+    </div>
+    {% endif %}
+
+    <p class="auth-footer" style="margin-top:1.5rem;">
+      <a href="{% url 'communities:index' %}">← Back to Communities</a>
+    </p>
+  </div>
 </div>
 {% endblock %}
