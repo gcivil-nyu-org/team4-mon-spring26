@@ -182,6 +182,8 @@ def nta_violations_view(request):
             "nov_description": v.nov_description,
             "current_status": v.current_status,
             "violation_status": v.violation_status,
+            "latitude": v.latitude,
+            "longitude": v.longitude,
         }
         for v in qs
     ]
@@ -216,6 +218,8 @@ def nta_complaints_view(request):
             "incident_address": c.incident_address,
             "status": c.status,
             "resolution_description": c.resolution_description,
+            "latitude": c.latitude,
+            "longitude": c.longitude,
         }
         for c in qs
     ]

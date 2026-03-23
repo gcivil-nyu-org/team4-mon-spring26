@@ -21,10 +21,20 @@
   const searchButton = searchForm.querySelector("button");
 
   const map = L.map(mapElement).setView(nycCenter, nycZoom);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
+  const mapboxToken = window.TENANTGUARD_CONFIG && window.TENANTGUARD_CONFIG.mapboxAccessToken;
+  if (mapboxToken) {
+    L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`, {
+      maxZoom: 19,
+      attribution: '&copy; Mapbox',
+      tileSize: 512,
+      zoomOffset: -1
+    }).addTo(map);
+  } else {
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+  }
 
   let activeLayer = null;
   let activePopup = null;
@@ -34,15 +44,21 @@
   const renderedLayerByLevel = new Map();
   const featureLayerByLevel = new Map();
 
+  const markers = L.markerClusterGroup({
+    maxClusterRadius: 40,
+    spiderfyOnMaxZoom: true,
+  });
+  map.addLayer(markers);
+
   function setStatus(message) {
     statusElement.textContent = message || "";
   }
 
   function getFillColor(score) {
-    if (score <= 3) {
+    if (score <= 5) {
       return "#dc2626";
     }
-    if (score <= 6) {
+    if (score <= 7.5) {
       return "#eab308";
     }
     return "#16a34a";
@@ -51,9 +67,9 @@
   function baseStyle(feature) {
     return {
       color: "#334155",
-      weight: 1.2,
+      weight: 1.5,
       fillColor: getFillColor(feature.properties.placeholder_score),
-      fillOpacity: 0.62,
+      fillOpacity: 0.82,
     };
   }
 
@@ -72,6 +88,8 @@
     const props = feature.properties;
     const ntaCode = props.nta_code;
     const issues = props.top_issues.map((issue) => `<li>${issue}</li>`).join("");
+
+    markers.clearLayers();
 
     const extraStats =
       props.total_violations !== undefined
@@ -120,7 +138,7 @@
   async function fetchViolations(ntaCode) {
     const container = document.getElementById("tab-violations");
     try {
-      const resp = await fetch(`/api/nta-violations/?nta_code=${encodeURIComponent(ntaCode)}&limit=25`);
+      const resp = await fetch(`/api/nta-violations/?nta_code=${encodeURIComponent(ntaCode)}&limit=200`);
       const data = await resp.json();
 
       if (!resp.ok || !data.violations || data.violations.length === 0) {
@@ -143,6 +161,21 @@
         )
         .join("");
 
+      data.violations.forEach((v) => {
+        if (v.latitude && v.longitude) {
+          const m = L.circleMarker([v.latitude, v.longitude], {
+            radius: 6,
+            fillColor: "#dc2626",
+            color: "#fff",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+          });
+          m.bindPopup(`<b>${v.address}</b><br/>Class ${v.violation_class} Violation<br/>${v.nov_description || ""}`);
+          markers.addLayer(m);
+        }
+      });
+
       container.innerHTML = `
         <p class="data-count">${data.count} violation${data.count !== 1 ? "s" : ""} found</p>
         <div class="data-list">${rows}</div>
@@ -155,7 +188,7 @@
   async function fetchComplaints(ntaCode) {
     const container = document.getElementById("tab-complaints");
     try {
-      const resp = await fetch(`/api/nta-complaints/?nta_code=${encodeURIComponent(ntaCode)}&limit=25`);
+      const resp = await fetch(`/api/nta-complaints/?nta_code=${encodeURIComponent(ntaCode)}&limit=200`);
       const data = await resp.json();
 
       if (!resp.ok || !data.complaints || data.complaints.length === 0) {
@@ -177,6 +210,21 @@
         </div>`
         )
         .join("");
+
+      data.complaints.forEach((c) => {
+        if (c.latitude && c.longitude) {
+          const m = L.circleMarker([c.latitude, c.longitude], {
+            radius: 6,
+            fillColor: "#eab308",
+            color: "#fff",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+          });
+          m.bindPopup(`<b>${c.incident_address || "Address"}</b><br/>${c.complaint_type}<br/>${c.descriptor || ""}`);
+          markers.addLayer(m);
+        }
+      });
 
       container.innerHTML = `
         <p class="data-count">${data.count} complaint${data.count !== 1 ? "s" : ""} found</p>

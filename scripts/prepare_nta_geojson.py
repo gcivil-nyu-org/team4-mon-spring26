@@ -94,6 +94,8 @@ def deterministic_grid_size(nta_code, level):
     bucket = int(digest[:6], 16)
     if level == "mid":
         return 2 + (bucket % 2)  # 2-3
+    elif level == "building":
+        return 3 + (bucket % 3)  # 3-5 sub-areas per block
     return 4 + (bucket % 3)  # 4-6
 
 
@@ -232,6 +234,13 @@ def build_block_layer(blocks_geojson, nta_geojson):
     return {"type": "FeatureCollection", "features": block_features}
 
 
+def build_building_layer(block_geojson):
+    building_features = []
+    for feature in block_geojson.get("features", []):
+        building_features.extend(subdivide_feature(feature, level="building"))
+    return {"type": "FeatureCollection", "features": building_features}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -263,11 +272,13 @@ def main():
     nta_geojson = transform(raw_geojson)
     mid_geojson = build_mid_layer(nta_geojson)
     block_geojson = build_block_layer(blocks_geojson, nta_geojson)
+    building_geojson = build_building_layer(block_geojson)
 
     outputs = [
         (output_dir / "nyc_nta_phase1.geojson", nta_geojson),
         (output_dir / "nyc_nta_zoom_mid.geojson", mid_geojson),
         (output_dir / "nyc_nta_zoom_block.geojson", block_geojson),
+        (output_dir / "nyc_nta_zoom_building.geojson", building_geojson),
     ]
     for path, payload in outputs:
         with path.open("w", encoding="utf-8") as outfile:
