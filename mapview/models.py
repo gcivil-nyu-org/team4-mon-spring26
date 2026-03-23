@@ -91,3 +91,23 @@ class NTARiskScore(models.Model):
 
     def __str__(self):
         return f"{self.nta_name} ({self.nta_code}): {self.risk_score}/10"
+
+
+class ScoreThreshold(models.Model):
+    """Configurable thresholds for map coloration."""
+
+    name = models.CharField(
+        max_length=50, help_text="e.g. 'High Risk', 'Medium Risk', 'Low Risk'"
+    )
+    color = models.CharField(max_length=20, help_text="Hex color code (e.g., #dc2626)")
+    max_score = models.FloatField(
+        help_text="Maximum score for this color. Ordered lowest to highest."
+    )
+
+    class Meta:
+        ordering = ["max_score"]
+        verbose_name = "Score Threshold"
+        verbose_name_plural = "Score Thresholds"
+
+    def __str__(self):
+        return f"{self.name} (<= {self.max_score}): {self.color}"

@@ -34,6 +34,8 @@
       <section class="map-wrapper">
         <div id="map" aria-label="NYC livability map"></div>
         <aside id="info-panel" class="info-panel hidden" aria-live="polite"></aside>
+        
+        <div id="map-legend" class="map-legend"></div>
       </section>
 
       <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
@@ -51,6 +53,7 @@
     <script>
       window.TENANTGUARD_CONFIG = {
         mapboxAccessToken: "{{ mapbox_access_token|escapejs }}",
+        thresholds: JSON.parse("{{ thresholds|escapejs }}")
       };
     </script>
     <script src="{% static 'mapview/js/dashboard.js' %}"></script>

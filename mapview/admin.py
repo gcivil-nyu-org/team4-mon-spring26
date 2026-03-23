@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Complaint311, HPDViolation, NTARiskScore
+from .models import Complaint311, HPDViolation, NTARiskScore, ScoreThreshold
 
 
 @admin.register(HPDViolation)
@@ -46,3 +46,9 @@ class NTARiskScoreAdmin(admin.ModelAdmin):
     list_filter = ["borough"]
     search_fields = ["nta_code", "nta_name"]
     readonly_fields = ["last_updated"]
+
+
+@admin.register(ScoreThreshold)
+class ScoreThresholdAdmin(admin.ModelAdmin):
+    list_display = ["name", "max_score", "color"]
+    ordering = ["max_score"]

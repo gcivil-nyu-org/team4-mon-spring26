@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
-from .models import Complaint311, HPDViolation, NTARiskScore
+from .models import Complaint311, HPDViolation, NTARiskScore, ScoreThreshold
 
 PROCESSED_GEOJSON_PATH = (
     Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
@@ -25,10 +25,27 @@ MAPBOX_GEOCODE_BASE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 
 
 def dashboard_view(request):
+    thresholds = list(
+        ScoreThreshold.objects.order_by("max_score").values(
+            "name", "max_score", "color"
+        )
+    )
+
+    # Defaults if none in DB
+    if not thresholds:
+        thresholds = [
+            {"name": "High Risk", "max_score": 5.0, "color": "#dc2626"},
+            {"name": "Medium Risk", "max_score": 7.5, "color": "#eab308"},
+            {"name": "Low Risk", "max_score": 10.0, "color": "#16a34a"},
+        ]
+
     return render(
         request,
         "mapview/dashboard.html",
-        {"mapbox_access_token": settings.MAPBOX_ACCESS_TOKEN},
+        {
+            "mapbox_access_token": settings.MAPBOX_ACCESS_TOKEN,
+            "thresholds": json.dumps(thresholds),
+        },
     )
 
 

@@ -55,14 +55,35 @@
   }
 
   function getFillColor(score) {
-    if (score <= 5) {
-      return "#dc2626";
+    const thresholds = window.TENANTGUARD_CONFIG?.thresholds || [
+      { max_score: 5, color: "#dc2626" },
+      { max_score: 7.5, color: "#eab308" },
+      { max_score: 10, color: "#16a34a" }
+    ];
+    for (let t of thresholds) {
+      if (score <= t.max_score) return t.color;
     }
-    if (score <= 7.5) {
-      return "#eab308";
-    }
-    return "#16a34a";
+    return thresholds[thresholds.length - 1].color;
   }
+
+  function initLegend() {
+    const legendEl = document.getElementById("map-legend");
+    if (!legendEl) return;
+    const thresholds = window.TENANTGUARD_CONFIG?.thresholds || [];
+    
+    let html = `<h4>Livability Risk</h4>`;
+    thresholds.forEach(t => {
+      html += `
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: ${t.color}"></div>
+          <span>${t.name}</span>
+        </div>
+      `;
+    });
+    legendEl.innerHTML = html;
+  }
+  
+  initLegend();
 
   function baseStyle(feature) {
     return {
