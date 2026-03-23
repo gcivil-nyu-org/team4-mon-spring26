@@ -1,5 +1,8 @@
 # TenantGuard NYC
 
+[![Build Status](https://app.travis-ci.com/gcivil-nyu-org/team4-mon-spring26.svg?branch=develop)](https://app.travis-ci.com/gcivil-nyu-org/team4-mon-spring26)
+[![Coverage Status](https://coveralls.io/repos/github/gcivil-nyu-org/team4-mon-spring26/badge.svg?branch=develop)](https://coveralls.io/github/gcivil-nyu-org/team4-mon-spring26?branch=develop)
+
 ML-powered web app to predict NYC building housing violations and facilitate tenant organizing.
 
 ## Quick Links
@@ -40,6 +43,55 @@ python manage.py migrate
 # Run
 python manage.py runserver
 ```
+
+## Deploy to AWS Elastic Beanstalk (Production)
+
+### 1) Prerequisites
+
+- AWS account with permissions for Elastic Beanstalk, EC2, S3, CloudWatch, and RDS
+- AWS CLI + EB CLI installed and configured
+- Python virtual environment active
+
+### 2) Create PostgreSQL (RDS)
+
+Create an RDS PostgreSQL instance in the same VPC/security context as your Elastic Beanstalk environment.
+
+Collect its connection details and build:
+
+`DATABASE_URL=postgres://USERNAME:PASSWORD@HOST:5432/DBNAME`
+
+### 3) Initialize and create Elastic Beanstalk environment
+
+```bash
+eb init
+eb create tenantguard-prod
+```
+
+### 4) Set production environment variables
+
+```bash
+eb setenv \
+DJANGO_SECRET_KEY="<strong-secret>" \
+DEBUG=False \
+ALLOWED_HOSTS="<your-eb-domain>,<your-custom-domain>" \
+CSRF_TRUSTED_ORIGINS="https://<your-eb-domain>,https://<your-custom-domain>" \
+DATABASE_URL="postgres://USERNAME:PASSWORD@HOST:5432/DBNAME" \
+DB_SSL_REQUIRE=True
+```
+
+### 5) Deploy
+
+```bash
+eb deploy
+eb open
+```
+
+### Notes
+
+- `Procfile` runs Gunicorn for Django.
+- `.ebextensions/01_django.config` runs `migrate` and `collectstatic` automatically on deploy.
+- `.ebextensions/02_staticfiles.config` maps `/static` for serving collected static assets.
+- For production media uploads, prefer S3 (instance-local media is ephemeral).
 
 ## Streamlit Demo (Live Link Ready)
 

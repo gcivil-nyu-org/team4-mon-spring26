@@ -11,7 +11,9 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Run the full ingestion pipeline: HPD violations → 311 complaints → risk scores"
+    help = (
+        "Run the full ingestion pipeline: HPD violations → 311 complaints → risk scores"
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -30,13 +32,31 @@ class Command(BaseCommand):
         limit = options["limit"]
         clear = options["clear"]
 
-        self.stdout.write(self.style.MIGRATE_HEADING("Step 1/3: Ingesting HPD violations..."))
-        call_command("ingest_hpd_violations", limit=limit, clear=clear, stdout=self.stdout, stderr=self.stderr)
+        self.stdout.write(
+            self.style.MIGRATE_HEADING("Step 1/3: Ingesting HPD violations...")
+        )
+        call_command(
+            "ingest_hpd_violations",
+            limit=limit,
+            clear=clear,
+            stdout=self.stdout,
+            stderr=self.stderr,
+        )
 
-        self.stdout.write(self.style.MIGRATE_HEADING("Step 2/3: Ingesting 311 complaints..."))
-        call_command("ingest_311_complaints", limit=limit, clear=clear, stdout=self.stdout, stderr=self.stderr)
+        self.stdout.write(
+            self.style.MIGRATE_HEADING("Step 2/3: Ingesting 311 complaints...")
+        )
+        call_command(
+            "ingest_311_complaints",
+            limit=limit,
+            clear=clear,
+            stdout=self.stdout,
+            stderr=self.stderr,
+        )
 
-        self.stdout.write(self.style.MIGRATE_HEADING("Step 3/3: Computing risk scores..."))
+        self.stdout.write(
+            self.style.MIGRATE_HEADING("Step 3/3: Computing risk scores...")
+        )
         call_command("compute_risk_scores", stdout=self.stdout, stderr=self.stderr)
 
         self.stdout.write(self.style.SUCCESS("\n✅  Full ingestion pipeline complete."))

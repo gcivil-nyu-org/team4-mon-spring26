@@ -69,7 +69,9 @@ class Command(BaseCommand):
         app_token = getattr(settings, "NYC_OPEN_DATA_APP_TOKEN", "")
         headers = {"X-App-Token": app_token} if app_token else {}
 
-        type_clauses = " OR ".join(f"complaint_type='{ct}'" for ct in HOUSING_COMPLAINT_TYPES)
+        type_clauses = " OR ".join(
+            f"complaint_type='{ct}'" for ct in HOUSING_COMPLAINT_TYPES
+        )
         where = f"({type_clauses}) AND latitude IS NOT NULL AND longitude IS NOT NULL"
 
         offset = 0
@@ -86,11 +88,15 @@ class Command(BaseCommand):
             }
 
             try:
-                resp = requests.get(COMPLAINTS_311_URL, params=params, headers=headers, timeout=30)
+                resp = requests.get(
+                    COMPLAINTS_311_URL, params=params, headers=headers, timeout=30
+                )
                 resp.raise_for_status()
                 records = resp.json()
             except requests.RequestException as exc:
-                self.stderr.write(self.style.ERROR(f"API request failed at offset {offset}: {exc}"))
+                self.stderr.write(
+                    self.style.ERROR(f"API request failed at offset {offset}: {exc}")
+                )
                 break
 
             if not records:
@@ -114,10 +120,15 @@ class Command(BaseCommand):
                         "incident_zip": rec.get("incident_zip", "") or "",
                         "borough": rec.get("borough", "") or "",
                         "status": rec.get("status", "") or "",
-                        "resolution_description": rec.get("resolution_description", "") or "",
+                        "resolution_description": rec.get("resolution_description", "")
+                        or "",
                         "bbl": rec.get("bbl", "") or "",
-                        "latitude": float(rec["latitude"]) if rec.get("latitude") else None,
-                        "longitude": float(rec["longitude"]) if rec.get("longitude") else None,
+                        "latitude": (
+                            float(rec["latitude"]) if rec.get("latitude") else None
+                        ),
+                        "longitude": (
+                            float(rec["longitude"]) if rec.get("longitude") else None
+                        ),
                     },
                 )
                 if created:
@@ -131,5 +142,7 @@ class Command(BaseCommand):
                 break
 
         self.stdout.write(
-            self.style.SUCCESS(f"311 ingest complete — created={total_created}  updated={total_updated}")
+            self.style.SUCCESS(
+                f"311 ingest complete — created={total_created}  updated={total_updated}"
+            )
         )

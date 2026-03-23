@@ -1,0 +1,37 @@
+language: python
+python:
+  - "3.13"
+
+install:
+  - pip install -r requirements.txt
+  - pip install black flake8 coveralls
+
+before_script:
+  - # Any preprocessing can go here
+
+script:
+  - black --check .
+  - flake8 .
+  - coverage run --source=accounts,mapview manage.py test
+
+after_success:
+  - coveralls
+
+deploy:
+  provider: elasticbeanstalk
+  region: us-east-1
+  app: TenantGuard       # Replace with your exact EB App Name
+  env: tenantguard-env   # Replace with your exact EB Environment Name
+  access_key_id: $AWS_ACCESS_KEY_ID
+  secret_access_key: $AWS_SECRET_ACCESS_KEY
+  on:
+    branch:
+      - main
+      - develop
+
+env:
+  global:
+    - DJANGO_SECRET_KEY="travis-ci-testing-key-12345"
+    - DEBUG="True"
+    - ALLOWED_HOSTS="*"
+    - DB_SSL_REQUIRE="False"

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
@@ -6,7 +6,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Complaint311, HPDViolation, NTARiskScore
-
 
 # ============================================================ #
 #  Sprint 1 tests (unchanged)
@@ -106,8 +105,12 @@ class HPDViolationModelTests(TestCase):
         self.assertEqual(str(v), "HPD-12345 (Class C) 123 Main St")
 
     def test_violation_ordering(self):
-        HPDViolation.objects.create(violation_id=1, violation_class="A", inspection_date=date(2025, 1, 1))
-        HPDViolation.objects.create(violation_id=2, violation_class="B", inspection_date=date(2025, 6, 1))
+        HPDViolation.objects.create(
+            violation_id=1, violation_class="A", inspection_date=date(2025, 1, 1)
+        )
+        HPDViolation.objects.create(
+            violation_id=2, violation_class="B", inspection_date=date(2025, 6, 1)
+        )
         first = HPDViolation.objects.first()
         self.assertEqual(first.violation_id, 2)
 
@@ -278,7 +281,7 @@ class BoundaryDBScoreOverlayTests(TestCase):
         response = self.client.get(reverse("boundaries"), {"level": "nta"})
         payload = response.json()
         sample_code = payload["features"][0]["properties"]["nta_code"]
-        original_score = payload["features"][0]["properties"]["placeholder_score"]
+        payload["features"][0]["properties"]["placeholder_score"]
 
         # Insert a DB score for that NTA
         NTARiskScore.objects.create(
@@ -293,7 +296,11 @@ class BoundaryDBScoreOverlayTests(TestCase):
 
         response2 = self.client.get(reverse("boundaries"), {"level": "nta"})
         payload2 = response2.json()
-        matched = [f for f in payload2["features"] if f["properties"]["nta_code"] == sample_code]
+        matched = [
+            f
+            for f in payload2["features"]
+            if f["properties"]["nta_code"] == sample_code
+        ]
         self.assertTrue(matched)
         self.assertEqual(matched[0]["properties"]["placeholder_score"], 2.5)
         self.assertEqual(matched[0]["properties"]["total_violations"], 999)

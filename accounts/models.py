@@ -42,13 +42,17 @@ class User(AbstractUser):
     @property
     def has_pending_verification(self):
         """True when the user has a verification request awaiting review."""
-        return self.verification_requests.filter(status=VerificationRequest.STATUS_PENDING).exists()
+        return self.verification_requests.filter(
+            status=VerificationRequest.STATUS_PENDING
+        ).exists()
 
     @property
     def verified_address(self):
         """Return the address from the most recent approved verification."""
         approved = (
-            self.verification_requests.filter(status=VerificationRequest.STATUS_APPROVED)
+            self.verification_requests.filter(
+                status=VerificationRequest.STATUS_APPROVED
+            )
             .order_by("-reviewed_at")
             .first()
         )

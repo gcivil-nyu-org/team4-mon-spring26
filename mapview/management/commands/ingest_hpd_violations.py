@@ -66,11 +66,15 @@ class Command(BaseCommand):
             }
 
             try:
-                resp = requests.get(HPD_VIOLATIONS_URL, params=params, headers=headers, timeout=30)
+                resp = requests.get(
+                    HPD_VIOLATIONS_URL, params=params, headers=headers, timeout=30
+                )
                 resp.raise_for_status()
                 records = resp.json()
             except requests.RequestException as exc:
-                self.stderr.write(self.style.ERROR(f"API request failed at offset {offset}: {exc}"))
+                self.stderr.write(
+                    self.style.ERROR(f"API request failed at offset {offset}: {exc}")
+                )
                 break
 
             if not records:
@@ -96,11 +100,21 @@ class Command(BaseCommand):
                         "nov_description": rec.get("novdescription", "") or "",
                         "nov_issued_date": _parse_date(rec.get("novissueddate")),
                         "current_status": rec.get("currentstatus", "") or "",
-                        "current_status_id": int(rec["currentstatusid"]) if rec.get("currentstatusid") else None,
+                        "current_status_id": (
+                            int(rec["currentstatusid"])
+                            if rec.get("currentstatusid")
+                            else None
+                        ),
                         "violation_status": rec.get("violationstatus", "") or "",
-                        "violation_status_date": _parse_date(rec.get("violationstatusdate")),
-                        "latitude": float(rec["latitude"]) if rec.get("latitude") else None,
-                        "longitude": float(rec["longitude"]) if rec.get("longitude") else None,
+                        "violation_status_date": _parse_date(
+                            rec.get("violationstatusdate")
+                        ),
+                        "latitude": (
+                            float(rec["latitude"]) if rec.get("latitude") else None
+                        ),
+                        "longitude": (
+                            float(rec["longitude"]) if rec.get("longitude") else None
+                        ),
                     },
                 )
                 if created:
@@ -114,5 +128,7 @@ class Command(BaseCommand):
                 break
 
         self.stdout.write(
-            self.style.SUCCESS(f"HPD ingest complete — created={total_created}  updated={total_updated}")
+            self.style.SUCCESS(
+                f"HPD ingest complete — created={total_created}  updated={total_updated}"
+            )
         )

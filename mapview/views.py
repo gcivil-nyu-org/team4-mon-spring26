@@ -10,11 +10,16 @@ from django.views.decorators.http import require_GET
 
 from .models import Complaint311, HPDViolation, NTARiskScore
 
-PROCESSED_GEOJSON_PATH = Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
+PROCESSED_GEOJSON_PATH = (
+    Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
+)
 BOUNDARY_LEVEL_PATHS = {
     "nta": Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson",
     "mid": Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_zoom_mid.geojson",
-    "block": Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_zoom_block.geojson",
+    "block": Path(settings.BASE_DIR)
+    / "data"
+    / "processed"
+    / "nyc_nta_zoom_block.geojson",
 }
 MAPBOX_GEOCODE_BASE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 
@@ -75,11 +80,15 @@ def boundary_geojson_view(request):
             payload = json.load(file)
     except FileNotFoundError:
         return JsonResponse(
-            {"error": f'GeoJSON for level "{level}" is not available. Run data preparation first.'},
+            {
+                "error": f'GeoJSON for level "{level}" is not available. Run data preparation first.'
+            },
             status=500,
         )
     except json.JSONDecodeError:
-        return JsonResponse({"error": f'GeoJSON for level "{level}" is invalid.'}, status=500)
+        return JsonResponse(
+            {"error": f'GeoJSON for level "{level}" is invalid.'}, status=500
+        )
 
     # Overlay real risk scores from the database when available
     _overlay_db_scores(payload)
@@ -119,7 +128,9 @@ def geocode_view(request):
     except requests.RequestException:
         return JsonResponse({"error": "Geocoding service request failed."}, status=502)
     except ValueError:
-        return JsonResponse({"error": "Geocoding service returned invalid data."}, status=502)
+        return JsonResponse(
+            {"error": "Geocoding service returned invalid data."}, status=502
+        )
 
     features = data.get("features", [])
     if not features:
@@ -155,7 +166,9 @@ def nta_violations_view(request):
     except (ValueError, TypeError):
         limit = 50
 
-    qs = HPDViolation.objects.filter(nta_code=nta_code).order_by("-inspection_date")[:limit]
+    qs = HPDViolation.objects.filter(nta_code=nta_code).order_by("-inspection_date")[
+        :limit
+    ]
 
     violations = [
         {
@@ -163,7 +176,9 @@ def nta_violations_view(request):
             "address": v.address,
             "apartment": v.apartment,
             "violation_class": v.violation_class,
-            "inspection_date": v.inspection_date.isoformat() if v.inspection_date else None,
+            "inspection_date": (
+                v.inspection_date.isoformat() if v.inspection_date else None
+            ),
             "nov_description": v.nov_description,
             "current_status": v.current_status,
             "violation_status": v.violation_status,
@@ -171,7 +186,9 @@ def nta_violations_view(request):
         for v in qs
     ]
 
-    return JsonResponse({"nta_code": nta_code, "count": len(violations), "violations": violations})
+    return JsonResponse(
+        {"nta_code": nta_code, "count": len(violations), "violations": violations}
+    )
 
 
 @require_GET
@@ -186,7 +203,9 @@ def nta_complaints_view(request):
     except (ValueError, TypeError):
         limit = 50
 
-    qs = Complaint311.objects.filter(nta_code=nta_code).order_by("-created_date")[:limit]
+    qs = Complaint311.objects.filter(nta_code=nta_code).order_by("-created_date")[
+        :limit
+    ]
 
     complaints = [
         {
@@ -201,7 +220,9 @@ def nta_complaints_view(request):
         for c in qs
     ]
 
-    return JsonResponse({"nta_code": nta_code, "count": len(complaints), "complaints": complaints})
+    return JsonResponse(
+        {"nta_code": nta_code, "count": len(complaints), "complaints": complaints}
+    )
 
 
 @require_GET
@@ -214,7 +235,9 @@ def nta_risk_summary_view(request):
     try:
         score = NTARiskScore.objects.get(nta_code=nta_code)
     except NTARiskScore.DoesNotExist:
-        return JsonResponse({"error": "No computed risk data for this NTA."}, status=404)
+        return JsonResponse(
+            {"error": "No computed risk data for this NTA."}, status=404
+        )
 
     return JsonResponse(
         {

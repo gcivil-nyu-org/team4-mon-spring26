@@ -19,6 +19,14 @@ urlpatterns = [
     path("verify/", views.request_verification_view, name="request-verification"),
     path("verify/status/", views.verification_status_view, name="verification-status"),
     # Admin moderation
-    path("admin/verifications/", views.admin_verification_queue_view, name="admin-verification-queue"),
-    path("admin/verifications/<int:pk>/", views.admin_verification_review_view, name="admin-verification-review"),
+    path(
+        "admin/verifications/",
+        views.admin_verification_queue_view,
+        name="admin-verification-queue",
+    ),
+    path(
+        "admin/verifications/<int:pk>/",
+        views.admin_verification_review_view,
+        name="admin-verification-review",
+    ),
 ]

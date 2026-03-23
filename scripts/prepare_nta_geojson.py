@@ -9,7 +9,6 @@ from pathlib import Path
 from shapely.geometry import box, mapping, shape
 from shapely.strtree import STRtree
 
-
 ISSUE_PACKS = [
     ["Rodent sightings", "Mold complaints", "Heating outages"],
     ["Noise complaints", "Trash overflow", "Water leaks"],
@@ -84,7 +83,9 @@ def should_include(raw_feature):
 
 
 def transform(raw_geojson):
-    features = [build_feature(f) for f in raw_geojson.get("features", []) if should_include(f)]
+    features = [
+        build_feature(f) for f in raw_geojson.get("features", []) if should_include(f)
+    ]
     return {"type": "FeatureCollection", "features": features}
 
 
@@ -225,7 +226,9 @@ def build_block_layer(blocks_geojson, nta_geojson):
             }
         )
     if missing_matches:
-        print(f"Warning: skipped {missing_matches} block features without parent NTA match.")
+        print(
+            f"Warning: skipped {missing_matches} block features without parent NTA match."
+        )
     return {"type": "FeatureCollection", "features": block_features}
 
 

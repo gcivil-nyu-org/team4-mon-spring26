@@ -1,10 +1,8 @@
-from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import User, VerificationRequest
-
 
 # ============================================================ #
 #  User Model
@@ -17,7 +15,9 @@ class UserModelTests(TestCase):
         self.assertEqual(user.role, User.ROLE_PUBLIC)
 
     def test_is_verified_tenant_property(self):
-        user = User.objects.create_user(username="u2", password="testpass123", role=User.ROLE_VERIFIED_TENANT)
+        user = User.objects.create_user(
+            username="u2", password="testpass123", role=User.ROLE_VERIFIED_TENANT
+        )
         self.assertTrue(user.is_verified_tenant)
 
     def test_public_user_is_not_verified(self):
@@ -25,11 +25,15 @@ class UserModelTests(TestCase):
         self.assertFalse(user.is_verified_tenant)
 
     def test_is_admin_user_for_admin_role(self):
-        user = User.objects.create_user(username="u4", password="testpass123", role=User.ROLE_ADMIN)
+        user = User.objects.create_user(
+            username="u4", password="testpass123", role=User.ROLE_ADMIN
+        )
         self.assertTrue(user.is_admin_user)
 
     def test_is_admin_user_for_superuser(self):
-        user = User.objects.create_superuser(username="su", password="testpass123", email="su@test.com")
+        user = User.objects.create_superuser(
+            username="su", password="testpass123", email="su@test.com"
+        )
         self.assertTrue(user.is_admin_user)
 
     def test_display_role(self):
@@ -103,8 +107,12 @@ class VerificationRequestModelTests(TestCase):
         self.assertIn("456 Elm St", str(vr))
 
     def test_ordering(self):
-        vr1 = VerificationRequest.objects.create(user=self.user, address="A", document_type="lease")
-        vr2 = VerificationRequest.objects.create(user=self.user, address="B", document_type="lease")
+        VerificationRequest.objects.create(
+            user=self.user, address="A", document_type="lease"
+        )
+        vr2 = VerificationRequest.objects.create(
+            user=self.user, address="B", document_type="lease"
+        )
         first = VerificationRequest.objects.first()
         self.assertEqual(first.pk, vr2.pk)
 
@@ -231,7 +239,9 @@ class LoginViewTests(TestCase):
 
 class LogoutViewTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="logoutuser", password="testpass123")
+        self.user = User.objects.create_user(
+            username="logoutuser", password="testpass123"
+        )
 
     def test_logout_redirects(self):
         self.client.login(username="logoutuser", password="testpass123")
@@ -324,7 +334,9 @@ class ProfileViewTests(TestCase):
 
 class RequestVerificationViewTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="tenant1", password="StrongPass99!")
+        self.user = User.objects.create_user(
+            username="tenant1", password="StrongPass99!"
+        )
 
     def test_requires_login(self):
         response = self.client.get(reverse("request-verification"))
@@ -468,7 +480,9 @@ class RequestVerificationViewTests(TestCase):
 
 class VerificationStatusViewTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="statususer", password="StrongPass99!")
+        self.user = User.objects.create_user(
+            username="statususer", password="StrongPass99!"
+        )
 
     def test_requires_login(self):
         response = self.client.get(reverse("verification-status"))
@@ -499,8 +513,12 @@ class AdminVerificationQueueViewTests(TestCase):
         self.admin = User.objects.create_user(
             username="admin1", password="StrongPass99!", role=User.ROLE_ADMIN
         )
-        self.public = User.objects.create_user(username="public1", password="StrongPass99!")
-        self.applicant = User.objects.create_user(username="applicant1", password="StrongPass99!")
+        self.public = User.objects.create_user(
+            username="public1", password="StrongPass99!"
+        )
+        self.applicant = User.objects.create_user(
+            username="applicant1", password="StrongPass99!"
+        )
         self.vr = VerificationRequest.objects.create(
             user=self.applicant,
             address="100 Broadway",
@@ -526,18 +544,24 @@ class AdminVerificationQueueViewTests(TestCase):
 
     def test_queue_filter_pending(self):
         self.client.login(username="admin1", password="StrongPass99!")
-        response = self.client.get(reverse("admin-verification-queue"), {"status": "pending"})
+        response = self.client.get(
+            reverse("admin-verification-queue"), {"status": "pending"}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "100 Broadway")
 
     def test_queue_filter_approved_empty(self):
         self.client.login(username="admin1", password="StrongPass99!")
-        response = self.client.get(reverse("admin-verification-queue"), {"status": "approved"})
+        response = self.client.get(
+            reverse("admin-verification-queue"), {"status": "approved"}
+        )
         self.assertNotContains(response, "100 Broadway")
 
     def test_queue_filter_all(self):
         self.client.login(username="admin1", password="StrongPass99!")
-        response = self.client.get(reverse("admin-verification-queue"), {"status": "all"})
+        response = self.client.get(
+            reverse("admin-verification-queue"), {"status": "all"}
+        )
         self.assertContains(response, "100 Broadway")
 
 
@@ -546,7 +570,9 @@ class AdminVerificationReviewViewTests(TestCase):
         self.admin = User.objects.create_user(
             username="admin2", password="StrongPass99!", role=User.ROLE_ADMIN
         )
-        self.applicant = User.objects.create_user(username="applicant2", password="StrongPass99!")
+        self.applicant = User.objects.create_user(
+            username="applicant2", password="StrongPass99!"
+        )
         self.vr = VerificationRequest.objects.create(
             user=self.applicant,
             address="200 Park Ave",
@@ -558,7 +584,9 @@ class AdminVerificationReviewViewTests(TestCase):
 
     def test_review_page_loads(self):
         self.client.login(username="admin2", password="StrongPass99!")
-        response = self.client.get(reverse("admin-verification-review", args=[self.vr.pk]))
+        response = self.client.get(
+            reverse("admin-verification-review", args=[self.vr.pk])
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "200 Park Ave")
         self.assertContains(response, "applicant2")
@@ -591,9 +619,11 @@ class AdminVerificationReviewViewTests(TestCase):
         self.assertEqual(self.applicant.role, User.ROLE_PUBLIC)  # role unchanged
 
     def test_public_user_cannot_review(self):
-        public = User.objects.create_user(username="pub", password="StrongPass99!")
+        User.objects.create_user(username="pub", password="StrongPass99!")
         self.client.login(username="pub", password="StrongPass99!")
-        response = self.client.get(reverse("admin-verification-review", args=[self.vr.pk]))
+        response = self.client.get(
+            reverse("admin-verification-review", args=[self.vr.pk])
+        )
         self.assertEqual(response.status_code, 403)
 
     def test_404_for_nonexistent_request(self):
@@ -609,7 +639,7 @@ class AdminVerificationReviewViewTests(TestCase):
 
 class VerifiedBadgeTests(TestCase):
     def test_nav_shows_verified_badge(self):
-        user = User.objects.create_user(
+        User.objects.create_user(
             username="vuser", password="StrongPass99!", role=User.ROLE_VERIFIED_TENANT
         )
         self.client.login(username="vuser", password="StrongPass99!")
@@ -642,13 +672,17 @@ class PermissionGateTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_admin_required_allows_admin_role(self):
-        User.objects.create_user(username="adm", password="StrongPass99!", role=User.ROLE_ADMIN)
+        User.objects.create_user(
+            username="adm", password="StrongPass99!", role=User.ROLE_ADMIN
+        )
         self.client.login(username="adm", password="StrongPass99!")
         response = self.client.get(reverse("admin-verification-queue"))
         self.assertEqual(response.status_code, 200)
 
     def test_admin_required_allows_superuser(self):
-        User.objects.create_superuser(username="su2", password="StrongPass99!", email="su2@test.com")
+        User.objects.create_superuser(
+            username="su2", password="StrongPass99!", email="su2@test.com"
+        )
         self.client.login(username="su2", password="StrongPass99!")
         response = self.client.get(reverse("admin-verification-queue"))
         self.assertEqual(response.status_code, 200)

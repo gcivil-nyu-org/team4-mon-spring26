@@ -16,7 +16,17 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(VerificationRequest)
 class VerificationRequestAdmin(admin.ModelAdmin):
-    list_display = ["id", "user", "address", "borough", "document_type", "has_document", "status", "created_at", "reviewed_at"]
+    list_display = [
+        "id",
+        "user",
+        "address",
+        "borough",
+        "document_type",
+        "has_document",
+        "status",
+        "created_at",
+        "reviewed_at",
+    ]
     list_filter = ["status", "borough", "document_type"]
     search_fields = ["user__username", "user__email", "address"]
     readonly_fields = ["created_at", "updated_at", "reviewed_at", "reviewed_by"]
