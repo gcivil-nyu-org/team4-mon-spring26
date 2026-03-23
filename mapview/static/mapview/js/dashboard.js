@@ -50,8 +50,28 @@
   });
   map.addLayer(markers);
 
-  function setStatus(message) {
+  function setStatus(message, type = 'info') {
     statusElement.textContent = message || "";
+    statusElement.className = `status-message status-${type}`;
+    if (message) {
+      statusElement.style.display = 'block';
+    } else {
+      statusElement.style.display = 'none';
+    }
+  }
+
+  function showLoading(message = 'Loading...') {
+    setStatus(message, 'loading');
+  }
+
+  function showError(message) {
+    setStatus(message, 'error');
+    setTimeout(() => setStatus(''), 5000);
+  }
+
+  function showSuccess(message) {
+    setStatus(message, 'success');
+    setTimeout(() => setStatus(''), 3000);
   }
 
   function getFillColor(score) {
@@ -81,6 +101,21 @@
       `;
     });
     legendEl.innerHTML = html;
+  }
+  
+  async function fetchWithRetry(url, options = {}, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+      } catch (error) {
+        if (i === retries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
   }
   
   initLegend();
@@ -158,11 +193,12 @@
 
   async function fetchViolations(ntaCode) {
     const container = document.getElementById("tab-violations");
+    container.innerHTML = "<div class='loading-spinner'><div class='spinner'></div><p>Loading violations...</p></div>";
+    
     try {
-      const resp = await fetch(`/api/nta-violations/?nta_code=${encodeURIComponent(ntaCode)}&limit=200`);
-      const data = await resp.json();
+      const data = await fetchWithRetry(`/api/nta-violations/?nta_code=${encodeURIComponent(ntaCode)}&limit=200`);
 
-      if (!resp.ok || !data.violations || data.violations.length === 0) {
+      if (!data.violations || data.violations.length === 0) {
         container.innerHTML = "<p class='empty-text'>No HPD violations found for this area.</p>";
         return;
       }
@@ -201,18 +237,26 @@
         <p class="data-count">${data.count} violation${data.count !== 1 ? "s" : ""} found</p>
         <div class="data-list">${rows}</div>
       `;
-    } catch {
-      container.innerHTML = "<p class='empty-text'>Failed to load violations.</p>";
+    } catch (error) {
+      console.error('Error fetching violations:', error);
+      container.innerHTML = `
+        <div class='error-message'>
+          <p>⚠️ Unable to load violations</p>
+          <p class='error-detail'>${error.message || 'Please try again later'}</p>
+          <button onclick="location.reload()" class="retry-button">Retry</button>
+        </div>
+      `;
     }
   }
 
   async function fetchComplaints(ntaCode) {
     const container = document.getElementById("tab-complaints");
+    container.innerHTML = "<div class='loading-spinner'><div class='spinner'></div><p>Loading complaints...</p></div>";
+    
     try {
-      const resp = await fetch(`/api/nta-complaints/?nta_code=${encodeURIComponent(ntaCode)}&limit=200`);
-      const data = await resp.json();
+      const data = await fetchWithRetry(`/api/nta-complaints/?nta_code=${encodeURIComponent(ntaCode)}&limit=200`);
 
-      if (!resp.ok || !data.complaints || data.complaints.length === 0) {
+      if (!data.complaints || data.complaints.length === 0) {
         container.innerHTML = "<p class='empty-text'>No 311 complaints found for this area.</p>";
         return;
       }
@@ -251,8 +295,15 @@
         <p class="data-count">${data.count} complaint${data.count !== 1 ? "s" : ""} found</p>
         <div class="data-list">${rows}</div>
       `;
-    } catch {
-      container.innerHTML = "<p class='empty-text'>Failed to load complaints.</p>";
+    } catch (error) {
+      console.error('Error fetching complaints:', error);
+      container.innerHTML = `
+        <div class='error-message'>
+          <p>⚠️ Unable to load complaints</p>
+          <p class='error-detail'>${error.message || 'Please try again later'}</p>
+          <button onclick="location.reload()" class="retry-button">Retry</button>
+        </div>
+      `;
     }
   }
 

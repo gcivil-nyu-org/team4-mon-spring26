@@ -22,6 +22,7 @@ deploy:
   region: us-east-1
   app: TenantGuard       # Replace with your exact EB App Name
   env: tenantguard-env   # Replace with your exact EB Environment Name
+  bucket: $AWS_EB_BUCKET # Provide this via Travis CI environment variables
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
   on:

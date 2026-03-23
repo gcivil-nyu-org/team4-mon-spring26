@@ -3,43 +3,35 @@
 {% block title %}Start Discussion - {{ nta.nta_name }} - TenantGuard{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8 offset-md-2">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'communities:index' %}">Communities</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'communities:nta_forum' nta.nta_code %}">{{ nta.nta_name }}</a></li>
-                <li class="breadcrumb-item active" aria-current="page">New Post</li>
-            </ol>
-        </nav>
-
-        <div class="card shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Start a Discussion in {{ nta.nta_name }}</h5>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    {% csrf_token %}
-                    
-                    {% for field in form %}
-                    <div class="mb-3">
-                        <label for="{{ field.id_for_label }}" class="form-label fw-bold">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}
-                            <div class="form-text">{{ field.help_text }}</div>
-                        {% endif %}
-                        {% for error in field.errors %}
-                            <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    {% endfor %}
-                    
-                    <div class="d-grid mt-4">
-                        <button type="submit" class="btn btn-primary">Post Discussion</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+<div class="community-container" style="max-width:36rem;">
+  <div class="community-card">
+    <div class="breadcrumb">
+      <a href="{% url 'communities:index' %}">Communities</a>
+      <span class="sep">/</span>
+      <a href="{% url 'communities:nta_forum' nta.nta_code %}">{{ nta.nta_name }}</a>
+      <span class="sep">/</span>
+      <span>New Post</span>
     </div>
+
+    <h5 class="community-section-header">Start a Discussion in {{ nta.nta_name }}</h5>
+    <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 0.4rem 0.4rem;padding:1.25rem;">
+      <form method="POST">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group" style="margin-bottom:0.9rem;">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <span class="field-hint">{{ field.help_text }}</span>
+          {% endif %}
+          {% for error in field.errors %}
+            <span class="field-error">{{ error }}</span>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top:0.5rem;">Post Discussion</button>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

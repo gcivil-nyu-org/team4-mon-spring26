@@ -34,11 +34,16 @@ HOUSING_COMPLAINT_TYPES = [
 
 
 def _parse_datetime(value):
-    """Return a datetime from an ISO-ish string, or None."""
+    """Return a timezone-aware datetime from an ISO-ish string, or None."""
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("T", " ").split(".")[0])
+        from django.utils import timezone as tz
+
+        dt = datetime.fromisoformat(value.replace("T", " ").split(".")[0])
+        if dt.tzinfo is None:
+            dt = tz.make_aware(dt, tz.utc)
+        return dt
     except (ValueError, AttributeError):
         return None
 
