@@ -102,6 +102,8 @@ eb open
 
 ### GitHub: require green Travis before merge
 
+Direct pushes to `develop` may be blocked (org rules). Merge a PR (for example from `chore/aws-eb-simplify` or your feature branch) after Travis is green.
+
 Repo **Settings → Branches → Branch protection rule** for `develop`:
 
 - Enable **Require status checks to pass before merging** and **Require branches to be up to date before merging**.
