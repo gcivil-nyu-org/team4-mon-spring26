@@ -10,21 +10,28 @@ cd /var/app/current
 
 # Log file
 LOG_FILE="/var/log/eb-postdeploy.log"
+SETUP_MARKER="/tmp/tenantguard-community-setup-done"
 
 echo "$(date): Starting post-deployment setup" >> $LOG_FILE
 
-# Run migrations
+# Run migrations (fast, always needed)
 python manage.py migrate --noinput >> $LOG_FILE 2>&1
 
 echo "$(date): Migrations complete" >> $LOG_FILE
 
-# Run community setup in background to avoid timeout
-# This will complete after deployment finishes
-nohup bash -c "
-    sleep 10
-    python manage.py create_nta_communities >> $LOG_FILE 2>&1 || echo 'Community creation skipped or failed' >> $LOG_FILE
-    python manage.py assign_user_communities >> $LOG_FILE 2>&1 || echo 'User assignment skipped or failed' >> $LOG_FILE
-    echo \"\$(date): Background community setup complete\" >> $LOG_FILE
-" &
+# Only run community setup once (marker file approach to avoid DB queries)
+# This avoids overhead on frequent deployments
+if [ ! -f "$SETUP_MARKER" ]; then
+    echo "$(date): First deployment detected, running community setup in background..." >> $LOG_FILE
+    nohup bash -c "
+        sleep 5
+        python manage.py create_nta_communities >> $LOG_FILE 2>&1 && \
+        python manage.py assign_user_communities >> $LOG_FILE 2>&1 && \
+        touch $SETUP_MARKER && \
+        echo \"\$(date): Background community setup complete\" >> $LOG_FILE
+    " &
+else
+    echo "$(date): Community setup already completed, skipping" >> $LOG_FILE
+fi
 
-echo "$(date): Post-deployment setup complete (community setup running in background)" >> $LOG_FILE
+echo "$(date): Post-deployment setup complete" >> $LOG_FILE
