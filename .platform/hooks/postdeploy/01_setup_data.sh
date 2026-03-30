@@ -11,20 +11,20 @@ cd /var/app/current
 # Log file
 LOG_FILE="/var/log/eb-postdeploy.log"
 
-echo "$(date): Starting post-deployment data setup" >> $LOG_FILE
+echo "$(date): Starting post-deployment setup" >> $LOG_FILE
 
-# Run migrations (should already be done, but just in case)
+# Run migrations
 python manage.py migrate --noinput >> $LOG_FILE 2>&1
 
-# Check if NTA data exists
-NTA_COUNT=$(python manage.py shell -c "from mapview.models import NTARiskScore; print(NTARiskScore.objects.count())" 2>/dev/null || echo "0")
+echo "$(date): Migrations complete" >> $LOG_FILE
 
-if [ "$NTA_COUNT" -gt "0" ]; then
-    echo "$(date): NTA data exists ($NTA_COUNT records), creating communities..." >> $LOG_FILE
-    python manage.py create_nta_communities >> $LOG_FILE 2>&1
-    python manage.py assign_user_communities >> $LOG_FILE 2>&1
-else
-    echo "$(date): No NTA data yet, skipping community creation (run create_nta_communities manually after data ingestion)" >> $LOG_FILE
-fi
+# Run community setup in background to avoid timeout
+# This will complete after deployment finishes
+nohup bash -c "
+    sleep 10
+    python manage.py create_nta_communities >> $LOG_FILE 2>&1 || echo 'Community creation skipped or failed' >> $LOG_FILE
+    python manage.py assign_user_communities >> $LOG_FILE 2>&1 || echo 'User assignment skipped or failed' >> $LOG_FILE
+    echo \"\$(date): Background community setup complete\" >> $LOG_FILE
+" &
 
-echo "$(date): Post-deployment setup complete" >> $LOG_FILE
+echo "$(date): Post-deployment setup complete (community setup running in background)" >> $LOG_FILE
