@@ -20,15 +20,16 @@ after_success:
 deploy:
   provider: elasticbeanstalk
   region: us-east-1
-  app: TenantGuard       # Replace with your exact EB App Name
-  env: tenantguard-env   # Replace with your exact EB Environment Name
-  bucket: $AWS_EB_BUCKET # Provide this via Travis CI environment variables
+  app: $AWS_EB_APP
+  env: $AWS_EB_ENV
+  bucket: $AWS_EB_BUCKET
   access_key_id: $AWS_ACCESS_KEY_ID
   secret_access_key: $AWS_SECRET_ACCESS_KEY
   on:
     branch:
       - main
       - develop
+      - deploy
 
 env:
   global:
