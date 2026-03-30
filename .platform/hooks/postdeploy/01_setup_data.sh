@@ -16,6 +16,9 @@ echo "$(date): Starting post-deployment data setup" >> $LOG_FILE
 # Run migrations (should already be done, but just in case)
 python manage.py migrate --noinput >> $LOG_FILE 2>&1
 
+# Create NTA communities (idempotent)
+python manage.py create_nta_communities >> $LOG_FILE 2>&1
+
 # Check if this is first deployment (no data yet)
 DATA_EXISTS=$(python manage.py shell -c "from mapview.models import NTARiskScore; print(NTARiskScore.objects.exists())" 2>/dev/null || echo "False")
 

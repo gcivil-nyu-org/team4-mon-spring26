@@ -12,7 +12,12 @@
     </div>
 
     <div class="forum-header">
-      <h2>{{ nta.nta_name }} Discussion Board</h2>
+      <div>
+        <h2>{{ nta.nta_name }} Discussion Board</h2>
+        <p style="font-size:0.82rem;color:#64748b;margin:0;">
+          {{ nta.borough }} · Risk Score: {{ nta.risk_score }}/10
+        </p>
+      </div>
       {% if can_post %}
         <a href="{% url 'communities:create_post' nta.nta_code %}" class="btn btn-primary btn-sm">Start a Discussion</a>
       {% else %}
@@ -22,6 +27,7 @@
 
     <div class="community-list" style="border-top:1px solid #e2e8f0;border-radius:0.4rem;">
       {% for post in posts %}
+        {% if post.is_active %}
         <a href="{% url 'communities:post_detail' nta.nta_code post.id %}" class="post-card">
           <div class="post-card-top">
             <h3>
@@ -31,8 +37,15 @@
             <span style="font-size:0.72rem;color:#64748b;white-space:nowrap;">{{ post.created_at|date:"M d, Y" }}</span>
           </div>
           <p class="preview">{{ post.content|truncatechars:100 }}</p>
-          <p class="meta">By {{ post.author.username }} · {{ post.comments.count }} replies</p>
+          <p class="meta">
+            By {{ post.author.username }}
+            · <span class="category-badge">{{ post.get_category_display }}</span>
+            · {{ post.comments.count }} replies
+            {% if post.linked_address %}· <span style="color:#2563eb;">&#128205;</span>{% endif %}
+            {% if post.image %}· <span style="color:#2563eb;">&#128247;</span>{% endif %}
+          </p>
         </a>
+        {% endif %}
       {% empty %}
         <div class="community-empty">
           <p>No discussions started yet for {{ nta.nta_name }}.</p>
@@ -42,4 +55,8 @@
     </div>
   </div>
 </div>
+
+<style>
+  .category-badge{display:inline-block;padding:0.05rem 0.35rem;background:#f1f5f9;border-radius:0.2rem;font-size:0.72rem;color:#475569;}
+</style>
 {% endblock %}

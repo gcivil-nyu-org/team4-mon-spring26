@@ -70,6 +70,40 @@ class User(AbstractUser):
         )
         return approved.nta_code if approved else None
 
+    @property
+    def verified_lat(self):
+        """Return latitude from the most recent approved verification."""
+        approved = (
+            self.verification_requests.filter(
+                status=VerificationRequest.STATUS_APPROVED
+            )
+            .order_by("-reviewed_at")
+            .first()
+        )
+        return approved.latitude if approved else None
+
+    @property
+    def verified_lng(self):
+        """Return longitude from the most recent approved verification."""
+        approved = (
+            self.verification_requests.filter(
+                status=VerificationRequest.STATUS_APPROVED
+            )
+            .order_by("-reviewed_at")
+            .first()
+        )
+        return approved.longitude if approved else None
+
+    @property
+    def active_community(self):
+        """Return the user's active community membership, or None."""
+        membership = (
+            self.community_memberships.filter(is_active=True)
+            .select_related("community")
+            .first()
+        )
+        return membership.community if membership else None
+
 
 class VerificationRequest(models.Model):
     """
@@ -107,6 +141,8 @@ class VerificationRequest(models.Model):
     borough = models.CharField(max_length=20, blank=True, default="")
     zip_code = models.CharField(max_length=10, blank=True, default="")
     nta_code = models.CharField(max_length=10, blank=True, default="", db_index=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
 
     document_type = models.CharField(
         max_length=20,

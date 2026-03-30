@@ -1,6 +1,6 @@
 {% extends 'communities/base_communities.html' %}
 
-{% block title %}Start Discussion - {{ nta.nta_name }} - TenantGuard{% endblock %}
+{% block title %}{% if editing %}Edit Post{% else %}Start Discussion{% endif %} - {{ nta.nta_name }} - TenantGuard{% endblock %}
 
 {% block content %}
 <div class="community-container" style="max-width:36rem;">
@@ -10,12 +10,12 @@
       <span class="sep">/</span>
       <a href="{% url 'communities:nta_forum' nta.nta_code %}">{{ nta.nta_name }}</a>
       <span class="sep">/</span>
-      <span>New Post</span>
+      <span>{% if editing %}Edit Post{% else %}New Post{% endif %}</span>
     </div>
 
-    <h5 class="community-section-header">Start a Discussion in {{ nta.nta_name }}</h5>
+    <h5 class="community-section-header">{% if editing %}Edit Post in {{ nta.nta_name }}{% else %}Start a Discussion in {{ nta.nta_name }}{% endif %}</h5>
     <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 0.4rem 0.4rem;padding:1.25rem;">
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         {% csrf_token %}
         {% for field in form %}
         <div class="form-group" style="margin-bottom:0.9rem;">
@@ -29,7 +29,9 @@
           {% endfor %}
         </div>
         {% endfor %}
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top:0.5rem;">Post Discussion</button>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top:0.5rem;">
+          {% if editing %}Save Changes{% else %}Post Discussion{% endif %}
+        </button>
       </form>
     </div>
   </div>

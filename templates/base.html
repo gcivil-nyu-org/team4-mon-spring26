@@ -22,9 +22,13 @@
               {{ user.get_short_name|default:user.username }}
               {% if user.is_verified_tenant %}<span class="nav-verified" title="Verified Tenant">✅</span>{% endif %}
             </span>
+            {% if user.is_verified_tenant %}
+              <a href="{% url 'communities:my_posts' %}" class="nav-link">My Posts</a>
+            {% endif %}
             {% if user.is_admin_user or user.is_staff or user.is_superuser %}
               <a href="{% url 'admin-verification-queue' %}" class="nav-link">Verify Queue</a>
               <a href="{% url 'communities:moderation_queue' %}" class="nav-link text-warning">Moderation</a>
+              <a href="{% url 'ingestion-dashboard' %}" class="nav-link">Ingestion</a>
             {% endif %}
             <a href="{% url 'profile' %}" class="nav-link">Profile</a>
             <form method="post" action="{% url 'logout' %}" class="nav-logout-form">

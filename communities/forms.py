@@ -5,7 +5,7 @@ from .models import Post, Comment, Report, DirectMessage
 class PostForm(forms.ModelForm):
     class Meta:
         model = Post
-        fields = ["title", "content"]
+        fields = ["title", "content", "category", "linked_address", "image"]
         widgets = {
             "title": forms.TextInput(
                 attrs={"class": "form-control", "placeholder": "Enter a clear title..."}
@@ -17,7 +17,21 @@ class PostForm(forms.ModelForm):
                     "placeholder": "What do you want to start a discussion about?",
                 }
             ),
+            "category": forms.Select(attrs={"class": "form-control"}),
+            "linked_address": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "Optional: link a building address",
+                }
+            ),
         }
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if image and hasattr(image, "size"):
+            if image.size > 5 * 1024 * 1024:
+                raise forms.ValidationError("Image must be under 5 MB.")
+        return image
 
 
 class CommentForm(forms.ModelForm):

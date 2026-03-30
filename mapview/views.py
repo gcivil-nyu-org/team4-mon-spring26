@@ -8,7 +8,22 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
-from .models import Complaint311, HPDViolation, NTARiskScore, ScoreThreshold
+from django.contrib.auth.decorators import user_passes_test
+
+from .models import (
+    Complaint311,
+    HPDViolation,
+    NTARiskScore,
+    ScoreRecencyConfig,
+    ScoreThreshold,
+)
+
+
+def _is_admin(user):
+    return user.is_authenticated and (
+        user.is_superuser or user.is_staff or getattr(user, "is_admin_user", False)
+    )
+
 
 PROCESSED_GEOJSON_PATH = (
     Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
@@ -275,4 +290,18 @@ def nta_risk_summary_view(request):
             "summary": score.summary,
             "last_updated": score.last_updated.isoformat(),
         }
+    )
+
+
+@user_passes_test(_is_admin)
+def ingestion_dashboard_view(request):
+    """Admin-only page for managing data ingestion."""
+    recency = ScoreRecencyConfig.load()
+    return render(
+        request,
+        "mapview/ingestion_dashboard.html",
+        {
+            "recency_choices": ScoreRecencyConfig.RECENCY_CHOICES,
+            "current_recency": recency.recency_window,
+        },
     )

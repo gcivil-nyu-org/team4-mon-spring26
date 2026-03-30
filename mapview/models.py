@@ -111,3 +111,174 @@ class ScoreThreshold(models.Model):
 
     def __str__(self):
         return f"{self.name} (<= {self.max_score}): {self.color}"
+
+
+class IngestionJob(models.Model):
+    """Tracks each data ingestion run (manual or scheduled)."""
+
+    STATUS_PENDING = "pending"
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    TRIGGER_MANUAL = "manual"
+    TRIGGER_SCHEDULED = "scheduled"
+    TRIGGER_CHOICES = [
+        (TRIGGER_MANUAL, "Manual"),
+        (TRIGGER_SCHEDULED, "Scheduled"),
+    ]
+
+    SOURCE_BOTH = "both"
+    SOURCE_HPD = "hpd_only"
+    SOURCE_311 = "311_only"
+    SOURCE_CHOICES = [
+        (SOURCE_BOTH, "Both"),
+        (SOURCE_HPD, "HPD Only"),
+        (SOURCE_311, "311 Only"),
+    ]
+
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True
+    )
+    trigger_type = models.CharField(
+        max_length=20, choices=TRIGGER_CHOICES, default=TRIGGER_MANUAL
+    )
+    requested_limit = models.IntegerField(default=10000)
+    sources = models.CharField(
+        max_length=50, choices=SOURCE_CHOICES, default=SOURCE_BOTH
+    )
+    current_step = models.CharField(max_length=100, blank=True, default="")
+    records_fetched = models.IntegerField(default=0)
+    records_target = models.IntegerField(default=0)
+    current_batch = models.IntegerField(default=0)
+    total_batches = models.IntegerField(default=0)
+    hpd_created = models.IntegerField(default=0)
+    hpd_updated = models.IntegerField(default=0)
+    complaints_created = models.IntegerField(default=0)
+    complaints_updated = models.IntegerField(default=0)
+    neighborhoods_scored = models.IntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Ingestion Job"
+        verbose_name_plural = "Ingestion Jobs"
+
+    def __str__(self):
+        return (
+            f"Ingestion #{self.pk} [{self.get_status_display()}] "
+            f"({self.get_trigger_type_display()})"
+        )
+
+    @property
+    def is_running(self):
+        return self.status == self.STATUS_RUNNING
+
+    @property
+    def elapsed_seconds(self):
+        if not self.started_at:
+            return 0
+        from django.utils import timezone
+
+        end = self.completed_at or timezone.now()
+        return (end - self.started_at).total_seconds()
+
+
+class IngestionSchedule(models.Model):
+    """Singleton — configures automatic recurring data ingestion."""
+
+    UNIT_HOURS = "hours"
+    UNIT_DAYS = "days"
+    UNIT_CHOICES = [
+        (UNIT_HOURS, "Hours"),
+        (UNIT_DAYS, "Days"),
+    ]
+
+    is_enabled = models.BooleanField(default=False)
+    interval_value = models.IntegerField(default=7)
+    interval_unit = models.CharField(
+        max_length=10, choices=UNIT_CHOICES, default=UNIT_DAYS
+    )
+    run_time = models.TimeField(default="03:00", help_text="Scheduled run time in UTC")
+    record_limit = models.IntegerField(default=10000)
+    sources = models.CharField(
+        max_length=50,
+        choices=IngestionJob.SOURCE_CHOICES,
+        default=IngestionJob.SOURCE_BOTH,
+    )
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    next_run_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Ingestion Schedule"
+        verbose_name_plural = "Ingestion Schedules"
+
+    def __str__(self):
+        state = "Enabled" if self.is_enabled else "Disabled"
+        return f"Schedule: every {self.interval_value} {self.interval_unit} [{state}]"
+
+    @classmethod
+    def load(cls):
+        """Return the singleton schedule, creating it if needed."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class ScoreRecencyConfig(models.Model):
+    """Singleton — controls the time window for risk score computation."""
+
+    RECENCY_CHOICES = [
+        ("1m", "Last 1 month"),
+        ("3m", "Last 3 months"),
+        ("6m", "Last 6 months"),
+        ("1y", "Last 1 year"),
+        ("2y", "Last 2 years"),
+        ("all", "All time"),
+    ]
+
+    recency_window = models.CharField(
+        max_length=5, choices=RECENCY_CHOICES, default="all"
+    )
+    last_recomputed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Score Recency Config"
+        verbose_name_plural = "Score Recency Configs"
+
+    def __str__(self):
+        return f"Recency: {self.get_recency_window_display()}"
+
+    @classmethod
+    def load(cls):
+        """Return the singleton config, creating it if needed."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def get_cutoff_date(self):
+        """Return the datetime cutoff for the configured window, or None for 'all'."""
+        if self.recency_window == "all":
+            return None
+        from django.utils import timezone
+        from dateutil.relativedelta import relativedelta
+
+        now = timezone.now()
+        mapping = {
+            "1m": relativedelta(months=1),
+            "3m": relativedelta(months=3),
+            "6m": relativedelta(months=6),
+            "1y": relativedelta(years=1),
+            "2y": relativedelta(years=2),
+        }
+        delta = mapping.get(self.recency_window)
+        return (now - delta) if delta else None

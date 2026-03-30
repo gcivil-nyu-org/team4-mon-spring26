@@ -1,12 +1,33 @@
 from django.contrib import admin
 
-from .models import Comment, DirectMessage, Post, Report
+from .models import Comment, Community, CommunityMembership, DirectMessage, Post, Report
+
+
+@admin.register(Community)
+class CommunityAdmin(admin.ModelAdmin):
+    list_display = ["name", "nta", "member_count", "post_count", "created_at"]
+    search_fields = ["name"]
+
+
+@admin.register(CommunityMembership)
+class CommunityMembershipAdmin(admin.ModelAdmin):
+    list_display = ["user", "community", "is_active", "joined_at"]
+    list_filter = ["is_active"]
+    raw_id_fields = ["user", "community"]
 
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ["title", "nta", "author", "is_pinned", "created_at"]
-    list_filter = ["is_pinned", "created_at"]
+    list_display = [
+        "title",
+        "nta",
+        "author",
+        "category",
+        "is_pinned",
+        "is_active",
+        "created_at",
+    ]
+    list_filter = ["is_pinned", "is_active", "category", "created_at"]
     search_fields = ["title", "content", "author__username"]
     raw_id_fields = ["author"]
 

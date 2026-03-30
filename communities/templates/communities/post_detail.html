@@ -19,7 +19,13 @@
           {% if post.is_pinned %}<span class="pinned-badge">Pinned</span>{% endif %}
           {{ post.title }}
         </h2>
-        <a href="{% url 'communities:report_content' nta.nta_code %}?post_id={{ post.id }}" class="btn-outline-danger" style="padding:0.2rem 0.5rem;font-size:0.78rem;border-radius:0.25rem;text-decoration:none;" title="Report Post">Report</a>
+        <div style="display:flex;gap:0.4rem;align-items:center;">
+          {% if request.user == post.author or request.user.is_admin_user %}
+            <a href="{% url 'communities:edit_post' nta.nta_code post.id %}" class="btn btn-sm" style="padding:0.2rem 0.5rem;font-size:0.78rem;">Edit</a>
+            <a href="{% url 'communities:delete_post' nta.nta_code post.id %}" class="btn btn-sm" style="padding:0.2rem 0.5rem;font-size:0.78rem;color:#dc2626;border-color:#dc2626;">Delete</a>
+          {% endif %}
+          <a href="{% url 'communities:report_content' nta.nta_code %}?post_id={{ post.id }}" class="btn-outline-danger" style="padding:0.2rem 0.5rem;font-size:0.78rem;border-radius:0.25rem;text-decoration:none;" title="Report Post">Report</a>
+        </div>
       </div>
 
       <div class="post-meta">
@@ -31,8 +37,21 @@
         {% if post.author.is_verified_tenant %}
           <span class="verified-tenant-badge">Verified Tenant</span>
         {% endif %}
+        · <span class="category-badge">{{ post.get_category_display }}</span>
         <br><small>on {{ post.created_at|date:"F d, Y P" }}</small>
       </div>
+
+      {% if post.linked_address %}
+        <div style="margin:0.5rem 0;padding:0.4rem 0.6rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:0.3rem;font-size:0.85rem;">
+          &#128205; Linked address: <strong>{{ post.linked_address }}</strong>
+        </div>
+      {% endif %}
+
+      {% if post.image %}
+        <div style="margin:0.75rem 0;">
+          <img src="{{ post.image.url }}" alt="Post image" style="max-width:100%;max-height:400px;border-radius:0.4rem;border:1px solid #e2e8f0;">
+        </div>
+      {% endif %}
 
       <div class="post-body">{{ post.content }}</div>
     </div>
