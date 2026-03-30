@@ -1,9 +1,13 @@
 import os
 
 from django import forms
+from django.conf import settings
 from django.contrib.auth.forms import UserCreationForm
+import requests
+from urllib.parse import quote
 
 from .models import User, VerificationRequest
+from mapview.utils import get_nta_code_from_coordinates
 
 ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 MAX_DOCUMENT_SIZE_MB = 10
@@ -126,6 +130,48 @@ class VerificationRequestForm(forms.ModelForm):
                 "Please wait for it to be processed before submitting a new one."
             )
         return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+
+        # Geocode the address to get coordinates and NTA code
+        address = instance.address
+        if address and settings.MAPBOX_ACCESS_TOKEN:
+            try:
+                # Call Mapbox geocoding API
+                encoded_query = quote(address, safe="")
+                url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json"
+                params = {
+                    "access_token": settings.MAPBOX_ACCESS_TOKEN,
+                    "limit": 1,
+                    "types": "address,place",
+                    "bbox": "-74.25559,40.49612,-73.70001,40.91553",  # NYC bounds
+                }
+                response = requests.get(url, params=params, timeout=8)
+                response.raise_for_status()
+                data = response.json()
+
+                features = data.get("features", [])
+                if features:
+                    center = features[0].get("center", [])
+                    if len(center) == 2:
+                        instance.longitude = center[0]
+                        instance.latitude = center[1]
+
+                        # Get NTA code from coordinates
+                        nta_code = get_nta_code_from_coordinates(
+                            instance.latitude, instance.longitude
+                        )
+                        if nta_code:
+                            instance.nta_code = nta_code
+            except Exception:
+                # Geocoding failed, but don't block submission
+                # Admin can manually set NTA code during review
+                pass
+
+        if commit:
+            instance.save()
+        return instance
 
 
 class AdminVerificationReviewForm(forms.Form):
