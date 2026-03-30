@@ -18,9 +18,7 @@ def get_nta_code_from_coordinates(lat, lng):
         return None
 
     # Load NTA GeoJSON data
-    nta_geojson_path = (
-        Path(__file__).parent.parent / "data" / "processed" / "nyc_nta.geojson"
-    )
+    nta_geojson_path = Path(__file__).parent.parent / "data" / "raw" / "nyc_nta.geojson"
 
     if not nta_geojson_path.exists():
         return None
@@ -35,7 +33,8 @@ def get_nta_code_from_coordinates(lat, lng):
     nta_geoms = []
     nta_codes = []
     for feature in nta_data.get("features", []):
-        code = feature.get("properties", {}).get("nta_code")
+        # The raw GeoJSON uses 'nta2020' as the field name
+        code = feature.get("properties", {}).get("nta2020")
         if code:
             nta_geoms.append(shape(feature["geometry"]))
             nta_codes.append(code)
