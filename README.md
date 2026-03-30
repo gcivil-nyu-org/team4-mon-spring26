@@ -14,7 +14,7 @@ ML-powered web app to predict NYC building housing violations and facilitate ten
 - **Live Proposal Document**: [Link](https://docs.google.com/document/d/1TRgnKfPCHs1N4AuZm2y5Q7pzO4U34T0YO25_MCShGVY/edit?usp=sharing)
 - **Final Proposal**: [docs/proposal.pdf](docs/proposal.pdf)
 - **TenantGuard Pitch**: [Link](https://docs.google.com/presentation/d/1X15IEGGepDtGm3xI6VvZ3TU_idvH2a6g/edit?usp=sharing&ouid=113186868007033640980&rtpof=true&sd=true)
-- **Live Demo**: [Add link when deployed]
+- **Live Demo (AWS EB)**: [https://tenantguard-env.eba-vwctwzqr.us-east-1.elasticbeanstalk.com](https://tenantguard-env.eba-vwctwzqr.us-east-1.elasticbeanstalk.com)
 
 ## Tech Stack
 
@@ -62,10 +62,14 @@ Collect its connection details and build:
 
 ### 3) Initialize and create Elastic Beanstalk environment
 
+Use the same **application name** and **environment name** as in [`.travis.yml`](.travis.yml) (`TenantGuard` / `tenantguard-env`) so Travis deploys to the right place.
+
 ```bash
-eb init
-eb create tenantguard-prod
+eb init TenantGuard --region us-east-1 --platform "64bit Amazon Linux 2023 v4.11.0 running Python 3.13"
+eb create tenantguard-env --database.engine postgres --database.size 10 --single --instance-types t3.small
 ```
+
+Adjust instance size and DB for cost. For Travis deploy, set `AWS_EB_BUCKET` to your account’s default bucket (often `elasticbeanstalk-<region>-<account-id>`).
 
 ### 4) Set production environment variables
 
@@ -86,11 +90,29 @@ eb deploy
 eb open
 ```
 
+### Travis CI (auto-deploy `develop`)
+
+1. Create an S3 bucket for EB application versions (any unique name in `us-east-1`).
+2. In [Travis repo settings → Environment variables](https://app.travis-ci.com/), add (not displayed in build logs):
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_EB_BUCKET` (that bucket name)
+3. IAM user needs permission to upload to the bucket and to create EB application versions / update the environment (e.g. `AdministratorAccess-AWSElasticBeanstalk` plus S3 rights to the bucket, or a tailored policy).
+4. Push to `develop` or `main`: tests run first; deploy runs **only** if the script stage passes.
+
+### GitHub: require green Travis before merge
+
+Repo **Settings → Branches → Branch protection rule** for `develop`:
+
+- Enable **Require status checks to pass before merging** and **Require branches to be up to date before merging**.
+- Select the Travis check that appears on pull requests (open a test PR once to discover the exact name).
+- Optionally **Require a pull request before merging**.
+
 ### Notes
 
-- `Procfile` runs Gunicorn for Django.
-- `.ebextensions/01_django.config` runs `migrate` and `collectstatic` automatically on deploy.
-- `.ebextensions/02_staticfiles.config` maps `/static` for serving collected static assets.
+- `Procfile` runs Gunicorn; WhiteNoise serves `/static` from collected files.
+- [`.ebextensions/02_django.config`](.ebextensions/02_django.config) runs `migrate` and `collectstatic` on deploy.
+- Initial map data: run `python manage.py ingest_all --limit 2000` (e.g. EB SSH or one-off job) if you need a populated demo.
 - For production media uploads, prefer S3 (instance-local media is ephemeral).
 
 ## Streamlit Demo (Live Link Ready)

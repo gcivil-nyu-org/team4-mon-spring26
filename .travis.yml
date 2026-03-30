@@ -1,3 +1,7 @@
+# Travis → Settings → Environment variables (secret, not in logs):
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_EB_BUCKET
+# Use the S3 bucket Elastic Beanstalk uses for app versions in this region/account
+# (e.g. elasticbeanstalk-us-east-1-<12-digit-account-id>).
 language: python
 python:
   - "3.13"

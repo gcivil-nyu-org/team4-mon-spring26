@@ -1,6 +1,6 @@
 # AWS Elastic Beanstalk Deployment Guide
 
-This guide explains how to deploy TenantGuard to AWS Elastic Beanstalk with automated data fetching.
+**Current source of truth:** [README.md](../README.md) (deploy steps, Travis, branch protection). This file is legacy detail; cron and postdeploy auto-ingest were removed for a simpler demo path—run `ingest_all` manually if needed.
 
 ## Prerequisites
 
