@@ -14,6 +14,7 @@ from .forms import (
     VerificationRequestForm,
 )
 from .models import User, VerificationRequest
+from communities.models import Community, CommunityMembership
 
 # ------------------------------------------------------------------ #
 #  Permission decorators
@@ -188,6 +189,19 @@ def admin_verification_review_view(request, pk):
                 vr.user.role = User.ROLE_VERIFIED_TENANT
                 vr.user.save(update_fields=["role"])
                 vr.save()
+
+                # Auto-assign user to their NTA community
+                if vr.nta_code:
+                    try:
+                        community = Community.objects.get(nta_id=vr.nta_code)
+                        CommunityMembership.objects.get_or_create(
+                            user=vr.user,
+                            community=community,
+                            defaults={"is_active": True},
+                        )
+                    except Community.DoesNotExist:
+                        pass  # Community not created yet, will be assigned later
+
                 messages.success(
                     request, f"✅ {vr.user.username} has been verified as a tenant."
                 )
