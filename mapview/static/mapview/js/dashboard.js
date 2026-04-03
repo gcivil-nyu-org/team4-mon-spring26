@@ -161,6 +161,7 @@
         <button class="panel-tab active" data-tab="summary">Summary</button>
         <button class="panel-tab" data-tab="violations">Violations</button>
         <button class="panel-tab" data-tab="complaints">Complaints</button>
+        <button class="panel-tab" data-tab="community">Community</button>
       </div>
       <div class="tab-content" id="tab-summary">
         <p><strong>Borough:</strong> ${props.borough}</p>
@@ -176,11 +177,21 @@
       <div class="tab-content hidden" id="tab-complaints">
         <p class="loading-text">Loading 311 complaints…</p>
       </div>
+      <div class="tab-content hidden" id="tab-community">
+        <p class="loading-text">Loading community info…</p>
+      </div>
     `;
     panelElement.classList.remove("hidden");
 
+    let communityLoaded = false;
     panelElement.querySelectorAll(".panel-tab").forEach((tab) => {
-      tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+      tab.addEventListener("click", () => {
+        switchTab(tab.dataset.tab);
+        if (tab.dataset.tab === "community" && !communityLoaded) {
+          communityLoaded = true;
+          fetchCommunityPreview(ntaCode);
+        }
+      });
     });
 
     document.getElementById("panel-close-btn").addEventListener("click", () => {
@@ -189,6 +200,42 @@
 
     fetchViolations(ntaCode);
     fetchComplaints(ntaCode);
+  }
+
+  async function fetchCommunityPreview(ntaCode) {
+    const container = document.getElementById("tab-community");
+    container.innerHTML = "<div class='loading-spinner'><div class='spinner'></div><p>Loading community...</p></div>";
+    try {
+      const data = await fetchWithRetry(`/api/map/community-preview/${encodeURIComponent(ntaCode)}/`);
+      if (!data.has_community) {
+        container.innerHTML = `
+          <p class="empty-text">No community set up for this neighborhood yet.</p>
+          <p><a href="/communities/${encodeURIComponent(ntaCode)}/" style="color:#2563eb;">View forum</a></p>
+        `;
+        return;
+      }
+      let postsHtml = '';
+      if (data.recent_posts && data.recent_posts.length > 0) {
+        postsHtml = data.recent_posts.map(p => `
+          <div style="padding:0.4rem 0;border-bottom:1px solid #f1f5f9;">
+            <a href="/communities/${encodeURIComponent(ntaCode)}/post/${p.id}/" style="color:#2563eb;font-weight:500;font-size:0.88rem;">${p.title}</a>
+            <div style="font-size:0.75rem;color:#64748b;">by ${p.author} · ${p.category_display} · ${p.reply_count} replies</div>
+          </div>
+        `).join('');
+      } else {
+        postsHtml = '<p class="empty-text">No posts yet.</p>';
+      }
+      container.innerHTML = `
+        <p><strong>Members:</strong> ${data.member_count} &nbsp;|&nbsp; <strong>Posts:</strong> ${data.post_count}</p>
+        ${data.is_member ? '<p style="color:#16a34a;font-size:0.85rem;font-weight:600;">You are a member of this community</p>' : ''}
+        <p><strong>Recent Discussions:</strong></p>
+        ${postsHtml}
+        <p style="margin-top:0.5rem;"><a href="/communities/${encodeURIComponent(ntaCode)}/" class="btn btn-primary btn-sm" style="text-decoration:none;display:inline-block;padding:0.3rem 0.8rem;font-size:0.82rem;">Visit Community Forum</a></p>
+      `;
+    } catch (error) {
+      console.error('Error fetching community preview:', error);
+      container.innerHTML = `<p class="empty-text">Unable to load community data.</p>`;
+    }
   }
 
   async function fetchViolations(ntaCode) {
@@ -543,7 +590,143 @@
 
   searchForm.addEventListener("submit", onSearchSubmit);
 
-  loadInitialLayer().catch((error) => {
+  /* ---- My Community marker + Return button ------------------------------ */
+
+  let myMarker = null;
+  let myNtaCode = null;
+
+  async function loadMyMarker() {
+    try {
+      const data = await fetch('/api/map/my-marker/').then(r => r.json());
+      if (!data.has_marker || !data.lat || !data.lng) return;
+      myNtaCode = data.nta_code;
+
+      const icon = L.divIcon({
+        className: 'my-community-marker',
+        html: '<div style="background:#2563eb;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+
+      myMarker = L.marker([data.lat, data.lng], { icon, zIndexOffset: 1000 })
+        .bindPopup(`<strong>My Home</strong><br/>${data.nta_name}<br/>Score: ${data.risk_score}/10<br/>${data.member_count} members · ${data.post_count} posts`)
+        .addTo(map);
+
+      // Add Return to My Community button
+      const returnBtn = L.control({ position: 'topright' });
+      returnBtn.onAdd = function() {
+        const div = L.DomUtil.create('div', 'leaflet-bar');
+        div.innerHTML = '<a href="#" title="Return to My Community" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#fff;font-size:18px;text-decoration:none;color:#2563eb;">&#127968;</a>';
+        div.querySelector('a').addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (myMarker) {
+            map.flyTo(myMarker.getLatLng(), 14, { duration: 0.8 });
+            myMarker.openPopup();
+          }
+        });
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+      };
+      returnBtn.addTo(map);
+    } catch (err) {
+      // Silently fail — user may not be authenticated or verified
+    }
+  }
+
+  /* ---- Community Activity Heatmap Layer --------------------------------- */
+
+  let activityLayer = null;
+  let activityVisible = false;
+
+  async function loadActivityLayer() {
+    try {
+      const data = await fetch('/api/map/community-activity/').then(r => r.json());
+      if (!data.communities || data.communities.length === 0) return;
+
+      const maxActivity = Math.max(...data.communities.map(c => c.activity_score), 1);
+
+      // Add toggle control
+      const toggleCtrl = L.control({ position: 'topright' });
+      toggleCtrl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'leaflet-bar');
+        div.innerHTML = '<a href="#" id="activity-toggle" title="Toggle Community Activity" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#fff;font-size:16px;text-decoration:none;color:#475569;">&#128293;</a>';
+        div.querySelector('a').addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleActivity(data.communities, maxActivity);
+        });
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+      };
+      toggleCtrl.addTo(map);
+    } catch (err) {
+      // Silently fail
+    }
+  }
+
+  function toggleActivity(communities, maxActivity) {
+    if (activityVisible && activityLayer) {
+      map.removeLayer(activityLayer);
+      activityLayer = null;
+      activityVisible = false;
+      const btn = document.getElementById('activity-toggle');
+      if (btn) btn.style.background = '#fff';
+      return;
+    }
+
+    const circleMarkers = [];
+    communities.forEach(c => {
+      const layerMap = featureLayerByLevel.get('nta');
+      if (!layerMap) return;
+      const layer = layerMap.get(c.nta_code);
+      if (!layer) return;
+      const center = layer.getBounds().getCenter();
+      const intensity = c.activity_score / maxActivity;
+      const radius = 8 + intensity * 25;
+      const cm = L.circleMarker(center, {
+        radius: radius,
+        fillColor: '#8b5cf6',
+        color: '#7c3aed',
+        weight: 1,
+        fillOpacity: 0.15 + intensity * 0.35,
+        interactive: false,
+      });
+      circleMarkers.push(cm);
+    });
+
+    activityLayer = L.layerGroup(circleMarkers).addTo(map);
+    activityVisible = true;
+    const btn = document.getElementById('activity-toggle');
+    if (btn) btn.style.background = '#ede9fe';
+  }
+
+  /* ---- Recency Label ---------------------------------------------------- */
+
+  async function loadRecencyLabel() {
+    try {
+      const data = await fetch('/api/map/recency-label/').then(r => r.json());
+      if (data.label && data.recency_window !== 'all') {
+        const legendEl = document.getElementById('map-legend');
+        if (legendEl) {
+          const tag = document.createElement('div');
+          tag.style.cssText = 'font-size:0.72rem;color:#64748b;margin-top:0.4rem;text-align:center;';
+          tag.textContent = 'Data window: ' + data.label;
+          legendEl.appendChild(tag);
+        }
+      }
+    } catch (err) {
+      // Silently fail
+    }
+  }
+
+  /* ---- Init ------------------------------------------------------------- */
+
+  loadInitialLayer().then(() => {
+    loadMyMarker();
+    loadActivityLayer();
+    loadRecencyLabel();
+  }).catch((error) => {
     setStatus(error.message);
   });
 })();

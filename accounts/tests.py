@@ -577,6 +577,7 @@ class AdminVerificationReviewViewTests(TestCase):
             user=self.applicant,
             address="200 Park Ave",
             borough="MANHATTAN",
+            nta_code="MN03",
             zip_code="10166",
             document_type="utility_bill",
             document_description="ConEd bill Feb 2026",
@@ -592,6 +593,15 @@ class AdminVerificationReviewViewTests(TestCase):
         self.assertContains(response, "applicant2")
 
     def test_approve_request(self):
+        from communities.models import Community, CommunityMembership
+        from mapview.models import NTARiskScore
+
+        # Create NTA and Community for auto-assignment
+        nta = NTARiskScore.objects.create(
+            nta_code="MN03", nta_name="Midtown", borough="Manhattan"
+        )
+        community = Community.objects.create(nta=nta, name="Midtown Community")
+
         self.client.login(username="admin2", password="StrongPass99!")
         response = self.client.post(
             reverse("admin-verification-review", args=[self.vr.pk]),
@@ -605,6 +615,13 @@ class AdminVerificationReviewViewTests(TestCase):
         self.assertEqual(self.vr.reviewed_by, self.admin)
         self.assertIsNotNone(self.vr.reviewed_at)
         self.assertEqual(self.applicant.role, User.ROLE_VERIFIED_TENANT)
+
+        # Verify automatic community membership creation
+        membership = CommunityMembership.objects.filter(
+            user=self.applicant, community=community
+        ).first()
+        self.assertIsNotNone(membership)
+        self.assertTrue(membership.is_active)
 
     def test_reject_request(self):
         self.client.login(username="admin2", password="StrongPass99!")

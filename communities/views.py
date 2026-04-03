@@ -3,11 +3,11 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
+from django.db.models import Q, Count
 
 from mapview.models import NTARiskScore
-from .models import Post, Comment, Report, DirectMessage
+from .models import Community, Post, Comment, Report, DirectMessage
 from .forms import PostForm, CommentForm, ReportForm, DirectMessageForm
-from django.db.models import Q
 
 User = get_user_model()
 
@@ -25,10 +25,55 @@ def is_verified_for_nta(user, nta_code):
 
 
 def forum_index(request):
-    """List of all NTA forums, or redirect to user's local forum."""
-    ntas = NTARiskScore.objects.all().order_by("nta_name")
+    """List of all NTA forums with My Community section."""
+    search = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "name")
+
+    communities = Community.objects.select_related("nta").annotate(
+        active_members=Count("members", filter=Q(members__is_active=True)),
+        active_posts=Count("nta__posts", filter=Q(nta__posts__is_active=True)),
+    )
+
+    if search:
+        communities = communities.filter(name__icontains=search)
+
+    sort_map = {
+        "name": "name",
+        "most_active": "-active_posts",
+        "most_members": "-active_members",
+        "highest_risk": "nta__risk_score",
+    }
+    communities = communities.order_by(sort_map.get(sort, "name"))
+
+    # My community info
+    my_community = None
+    my_nta = None
+    if request.user.is_authenticated and getattr(
+        request.user, "is_verified_tenant", False
+    ):
+        nta_code = request.user.verified_nta_code
+        if nta_code:
+            try:
+                my_community = Community.objects.select_related("nta").get(
+                    nta_id=nta_code
+                )
+                my_nta = my_community.nta
+            except Community.DoesNotExist:
+                pass
+
+    # Fallback: if no communities exist yet, show NTAs directly
+    if not communities.exists():
+        ntas = NTARiskScore.objects.all().order_by("nta_name")
+    else:
+        ntas = None
+
     context = {
+        "communities": communities,
         "ntas": ntas,
+        "my_community": my_community,
+        "my_nta": my_nta,
+        "search": search,
+        "sort": sort,
     }
     return render(request, "communities/index.html", context)
 
@@ -89,7 +134,7 @@ def create_post(request, nta_code):
         return redirect("communities:nta_forum", nta_code=nta.nta_code)
 
     if request.method == "POST":
-        form = PostForm(request.POST)
+        form = PostForm(request.POST, request.FILES)
         if form.is_valid():
             post = form.save(commit=False)
             post.nta = nta
@@ -303,3 +348,60 @@ def chat(request, user_id):
         "form": form,
     }
     return render(request, "communities/chat.html", context)
+
+
+@login_required
+def edit_post(request, nta_code, post_id):
+    nta = get_object_or_404(NTARiskScore, nta_code=nta_code)
+    post = get_object_or_404(Post, id=post_id, nta=nta, is_active=True)
+
+    # Only author or admin can edit
+    is_admin = getattr(request.user, "is_admin_user", False)
+    if post.author != request.user and not is_admin:
+        messages.error(request, "You can only edit your own posts.")
+        return redirect("communities:post_detail", nta_code=nta_code, post_id=post_id)
+
+    if request.method == "POST":
+        form = PostForm(request.POST, request.FILES, instance=post)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Post updated successfully.")
+            return redirect(
+                "communities:post_detail", nta_code=nta_code, post_id=post.id
+            )
+    else:
+        form = PostForm(instance=post)
+
+    context = {"nta": nta, "form": form, "post": post, "editing": True}
+    return render(request, "communities/create_post.html", context)
+
+
+@login_required
+def delete_post(request, nta_code, post_id):
+    nta = get_object_or_404(NTARiskScore, nta_code=nta_code)
+    post = get_object_or_404(Post, id=post_id, nta=nta)
+
+    is_admin = getattr(request.user, "is_admin_user", False)
+    if post.author != request.user and not is_admin:
+        messages.error(request, "You can only delete your own posts.")
+        return redirect("communities:post_detail", nta_code=nta_code, post_id=post_id)
+
+    if request.method == "POST":
+        post.is_active = False
+        post.save(update_fields=["is_active"])
+        messages.success(request, "Post deleted.")
+        return redirect("communities:nta_forum", nta_code=nta_code)
+
+    context = {"nta": nta, "post": post}
+    return render(request, "communities/delete_post.html", context)
+
+
+@login_required
+def my_posts_view(request):
+    posts = (
+        Post.objects.filter(author=request.user, is_active=True)
+        .select_related("nta")
+        .order_by("-created_at")
+    )
+    context = {"posts": posts}
+    return render(request, "communities/my_posts.html", context)

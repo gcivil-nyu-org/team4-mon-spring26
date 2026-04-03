@@ -1,13 +1,25 @@
+import json
 from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Complaint311, HPDViolation, NTARiskScore, ScoreThreshold
+from .models import (
+    Complaint311,
+    HPDViolation,
+    IngestionJob,
+    IngestionSchedule,
+    NTARiskScore,
+    ScoreRecencyConfig,
+    ScoreThreshold,
+)
+
+User = get_user_model()
 
 # ============================================================ #
 #  Sprint 1 tests (unchanged)
@@ -644,3 +656,279 @@ class IngestAllCommandTests(TestCase):
 
         call_command("ingest_all", limit=5)
         # If no exceptions, the pipeline ran successfully
+
+
+# ============================================================ #
+#  Sprint 3 – Ingestion Models
+# ============================================================ #
+
+
+class IngestionJobModelTests(TestCase):
+    def test_create_job(self):
+        job = IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            requested_limit=10000,
+            sources=IngestionJob.SOURCE_BOTH,
+        )
+        self.assertEqual(job.status, IngestionJob.STATUS_PENDING)
+        self.assertIn("Pending", str(job))
+
+    def test_is_running(self):
+        job = IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            status=IngestionJob.STATUS_RUNNING,
+            started_at=timezone.now(),
+        )
+        self.assertTrue(job.is_running)
+
+    def test_elapsed_seconds(self):
+        job = IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            status=IngestionJob.STATUS_RUNNING,
+            started_at=timezone.now(),
+        )
+        self.assertGreaterEqual(job.elapsed_seconds, 0)
+
+    def test_ordering_latest_first(self):
+        IngestionJob.objects.create(trigger_type=IngestionJob.TRIGGER_MANUAL)
+        j2 = IngestionJob.objects.create(trigger_type=IngestionJob.TRIGGER_SCHEDULED)
+        first = IngestionJob.objects.first()
+        self.assertEqual(first.pk, j2.pk)
+
+
+class IngestionScheduleModelTests(TestCase):
+    def test_singleton_load(self):
+        s1 = IngestionSchedule.load()
+        s2 = IngestionSchedule.load()
+        self.assertEqual(s1.pk, s2.pk)
+
+    def test_defaults(self):
+        s = IngestionSchedule.load()
+        self.assertFalse(s.is_enabled)
+        self.assertEqual(s.interval_unit, "days")
+
+
+class ScoreRecencyConfigModelTests(TestCase):
+    def test_singleton_load(self):
+        c1 = ScoreRecencyConfig.load()
+        c2 = ScoreRecencyConfig.load()
+        self.assertEqual(c1.pk, c2.pk)
+
+    def test_default_is_all(self):
+        c = ScoreRecencyConfig.load()
+        self.assertEqual(c.recency_window, "all")
+
+
+# ============================================================ #
+#  Sprint 3 – Ingestion API Endpoints
+# ============================================================ #
+
+
+class IngestionAPITestMixin:
+    """Helper to create an admin user and log in."""
+
+    def _login_admin(self):
+        self.admin = User.objects.create_superuser(
+            username="ingadmin", password="StrongPass99!", email="a@test.com"
+        )
+        self.client.login(username="ingadmin", password="StrongPass99!")
+
+
+class IngestionStatusAPITests(IngestionAPITestMixin, TestCase):
+    def test_unauthenticated_returns_401(self):
+        response = self.client.get(reverse("ingestion-status"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_non_admin_returns_403(self):
+        User.objects.create_user(username="pub", password="StrongPass99!")
+        self.client.login(username="pub", password="StrongPass99!")
+        response = self.client.get(reverse("ingestion-status"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_idle_status(self):
+        self._login_admin()
+        response = self.client.get(reverse("ingestion-status"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "idle")
+
+    def test_running_status(self):
+        self._login_admin()
+        IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            status=IngestionJob.STATUS_RUNNING,
+            started_at=timezone.now(),
+        )
+        response = self.client.get(reverse("ingestion-status"))
+        data = response.json()
+        self.assertEqual(data["status"], "running")
+
+
+class IngestionStatsAPITests(IngestionAPITestMixin, TestCase):
+    def test_stats_returns_counts(self):
+        self._login_admin()
+        HPDViolation.objects.create(violation_id=1, violation_class="A")
+        Complaint311.objects.create(unique_key="C1", complaint_type="HEAT/HOT WATER")
+        response = self.client.get(reverse("ingestion-stats"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["hpd_violations"], 1)
+        self.assertEqual(data["complaints_311"], 1)
+        self.assertIn("recency_window", data)
+
+
+class IngestionHistoryAPITests(IngestionAPITestMixin, TestCase):
+    def test_empty_history(self):
+        self._login_admin()
+        response = self.client.get(reverse("ingestion-history"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["history"]), 0)
+
+    def test_history_returns_jobs(self):
+        self._login_admin()
+        IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            status=IngestionJob.STATUS_COMPLETED,
+        )
+        response = self.client.get(reverse("ingestion-history"))
+        data = response.json()
+        self.assertEqual(len(data["history"]), 1)
+
+
+class IngestionScheduleAPITests(IngestionAPITestMixin, TestCase):
+    def test_get_schedule(self):
+        self._login_admin()
+        response = self.client.get(reverse("ingestion-schedule"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("is_enabled", data)
+
+    def test_update_schedule(self):
+        self._login_admin()
+        response = self.client.post(
+            reverse("ingestion-schedule"),
+            json.dumps(
+                {"is_enabled": True, "interval_value": 3, "interval_unit": "days"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["is_enabled"])
+        self.assertEqual(data["interval_value"], 3)
+
+
+class IngestionRecencyAPITests(IngestionAPITestMixin, TestCase):
+    def test_get_recency(self):
+        self._login_admin()
+        response = self.client.get(reverse("ingestion-recency"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["recency_window"], "all")
+
+    def test_set_invalid_recency(self):
+        self._login_admin()
+        response = self.client.post(
+            reverse("ingestion-recency"),
+            json.dumps({"recency_window": "invalid"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_set_valid_recency(self):
+        self._login_admin()
+        response = self.client.post(
+            reverse("ingestion-recency"),
+            json.dumps({"recency_window": "6m"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        config = ScoreRecencyConfig.load()
+        self.assertEqual(config.recency_window, "6m")
+
+
+class IngestionStartAPITests(IngestionAPITestMixin, TestCase):
+    @patch("mapview.views_ingestion.run_ingestion_job")
+    def test_start_creates_job(self, mock_run):
+        self._login_admin()
+        response = self.client.post(
+            reverse("ingestion-start"),
+            json.dumps({"limit": 5000, "sources": "hpd_only"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("job", data)
+        self.assertEqual(data["job"]["sources"], "hpd_only")
+        mock_run.assert_called_once()
+
+
+# ============================================================ #
+#  Sprint 3 – Map-Community API Endpoints
+# ============================================================ #
+
+
+class MapRecencyLabelTests(TestCase):
+    def test_recency_label_returns_200(self):
+        response = self.client.get(reverse("map-recency-label"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("label", data)
+
+
+class MapMyMarkerTests(TestCase):
+    def test_unauthenticated_returns_no_marker(self):
+        response = self.client.get(reverse("map-my-marker"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["has_marker"])
+
+
+class MapCommunityPreviewTests(TestCase):
+    def test_unknown_nta_returns_404(self):
+        response = self.client.get(reverse("map-community-preview", args=["ZZZZZ"]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_nta_without_community(self):
+        NTARiskScore.objects.create(
+            nta_code="TEST01", nta_name="Test NTA", borough="TEST"
+        )
+        response = self.client.get(reverse("map-community-preview", args=["TEST01"]))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["has_community"])
+
+
+class MapCommunityActivityTests(TestCase):
+    def test_activity_returns_200(self):
+        response = self.client.get(reverse("map-community-activity"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("communities", data)
+
+
+# ============================================================ #
+#  Sprint 3 – Ingestion Dashboard View
+# ============================================================ #
+
+
+class IngestionDashboardViewTests(TestCase):
+    def test_anonymous_redirected(self):
+        response = self.client.get(reverse("ingestion-dashboard"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_non_admin_redirected(self):
+        User.objects.create_user(username="pub", password="StrongPass99!")
+        self.client.login(username="pub", password="StrongPass99!")
+        response = self.client.get(reverse("ingestion-dashboard"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_admin_can_access(self):
+        User.objects.create_superuser(
+            username="admin", password="StrongPass99!", email="a@t.com"
+        )
+        self.client.login(username="admin", password="StrongPass99!")
+        response = self.client.get(reverse("ingestion-dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Data Ingestion Dashboard")

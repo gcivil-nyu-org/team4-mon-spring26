@@ -1,9 +1,10 @@
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import User, VerificationRequest
 from mapview.models import NTARiskScore
-from .models import Comment, DirectMessage, Post, Report
+from .models import Comment, Community, CommunityMembership, DirectMessage, Post, Report
 
 # ============================================================ #
 #  Model __str__ tests
@@ -215,7 +216,11 @@ class CommunitiesTests(TestCase):
 
         response = self.client.post(
             reverse("communities:create_post", args=[self.nta.nta_code]),
-            {"title": "New Resident", "content": "Hello everyone!"},
+            {
+                "title": "New Resident",
+                "content": "Hello everyone!",
+                "category": "general",
+            },
         )
         new_post = Post.objects.get(title="New Resident")
         self.assertRedirects(
@@ -412,3 +417,384 @@ class CommunitiesTests(TestCase):
         self.client.get(reverse("communities:chat", args=[self.verified_user2.id]))
         msg = DirectMessage.objects.get(content="Unread msg")
         self.assertTrue(msg.is_read)
+
+
+# ============================================================ #
+#  Sprint 3 – Community & CommunityMembership Models
+# ============================================================ #
+
+
+class CommunityModelTests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+
+    def test_create_community(self):
+        c = Community.objects.create(nta=self.nta, name="Inwood Community")
+        self.assertEqual(str(c), "Inwood Community")
+        self.assertEqual(c.member_count, 0)
+
+    def test_unique_nta(self):
+        Community.objects.create(nta=self.nta, name="First")
+        from django.db import IntegrityError
+
+        with self.assertRaises(IntegrityError):
+            Community.objects.create(nta=self.nta, name="Second")
+
+
+class CommunityMembershipModelTests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        self.community = Community.objects.create(nta=self.nta, name="Inwood Community")
+        self.user = User.objects.create_user(username="member1", password="password123")
+
+    def test_create_membership(self):
+        m = CommunityMembership.objects.create(community=self.community, user=self.user)
+        self.assertIn("member1", str(m))
+        self.assertIn("Inwood", str(m))
+
+    def test_unique_together(self):
+        CommunityMembership.objects.create(community=self.community, user=self.user)
+        from django.db import IntegrityError
+
+        with self.assertRaises(IntegrityError):
+            CommunityMembership.objects.create(community=self.community, user=self.user)
+
+
+# ============================================================ #
+#  Sprint 3 – Management Commands
+# ============================================================ #
+
+
+class CreateNTACommunitiesCommandTests(TestCase):
+    def test_creates_communities(self):
+        NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        NTARiskScore.objects.create(
+            nta_code="BK01", nta_name="Greenpoint", borough="Brooklyn"
+        )
+        call_command("create_nta_communities")
+        self.assertEqual(Community.objects.count(), 2)
+
+    def test_idempotent(self):
+        NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        call_command("create_nta_communities")
+        call_command("create_nta_communities")
+        self.assertEqual(Community.objects.count(), 1)
+
+
+class AssignUserCommunitiesCommandTests(TestCase):
+    def test_assigns_verified_users(self):
+        nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        community = Community.objects.create(nta=nta, name="Inwood Community")
+        user = User.objects.create_user(
+            username="v1", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        VerificationRequest.objects.create(
+            user=user,
+            nta_code="MN01",
+            status=VerificationRequest.STATUS_APPROVED,
+            document_type="lease",
+        )
+        call_command("assign_user_communities")
+        self.assertTrue(
+            CommunityMembership.objects.filter(community=community, user=user).exists()
+        )
+
+    def test_skips_already_assigned(self):
+        nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        community = Community.objects.create(nta=nta, name="Inwood Community")
+        user = User.objects.create_user(
+            username="v2", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        VerificationRequest.objects.create(
+            user=user,
+            nta_code="MN01",
+            status=VerificationRequest.STATUS_APPROVED,
+            document_type="lease",
+        )
+        CommunityMembership.objects.create(community=community, user=user)
+        call_command("assign_user_communities")
+        self.assertEqual(
+            CommunityMembership.objects.filter(community=community, user=user).count(),
+            1,
+        )
+
+
+# ============================================================ #
+#  Sprint 3 – Edit / Delete Post Views
+# ============================================================ #
+
+
+class EditDeletePostTests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        self.author = User.objects.create_user(
+            username="author1", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        VerificationRequest.objects.create(
+            user=self.author,
+            nta_code="MN01",
+            status=VerificationRequest.STATUS_APPROVED,
+            document_type="lease",
+        )
+        self.other = User.objects.create_user(
+            username="other1", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        self.post = Post.objects.create(
+            nta=self.nta, author=self.author, title="Edit Me", content="Original"
+        )
+
+    def test_author_can_edit(self):
+        self.client.login(username="author1", password="password123")
+        response = self.client.get(
+            reverse("communities:edit_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit Post")
+
+    def test_author_can_submit_edit(self):
+        self.client.login(username="author1", password="password123")
+        response = self.client.post(
+            reverse("communities:edit_post", args=["MN01", self.post.id]),
+            {
+                "title": "Updated Title",
+                "content": "Updated Content",
+                "category": "general",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.title, "Updated Title")
+
+    def test_non_author_cannot_edit(self):
+        self.client.login(username="other1", password="password123")
+        response = self.client.get(
+            reverse("communities:edit_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 302)
+
+    def test_author_can_delete(self):
+        self.client.login(username="author1", password="password123")
+        response = self.client.post(
+            reverse("communities:delete_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.post.refresh_from_db()
+        self.assertFalse(self.post.is_active)
+
+    def test_non_author_cannot_delete(self):
+        self.client.login(username="other1", password="password123")
+        response = self.client.post(
+            reverse("communities:delete_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.post.refresh_from_db()
+        self.assertTrue(self.post.is_active)
+
+    def test_admin_can_edit(self):
+        User.objects.create_superuser(
+            username="admin_edit", password="password123", email="a@t.com"
+        )
+        self.client.login(username="admin_edit", password="password123")
+        response = self.client.get(
+            reverse("communities:edit_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_can_delete(self):
+        User.objects.create_superuser(
+            username="admin_del", password="password123", email="a@t.com"
+        )
+        self.client.login(username="admin_del", password="password123")
+        response = self.client.post(
+            reverse("communities:delete_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.post.refresh_from_db()
+        self.assertFalse(self.post.is_active)
+
+    def test_delete_get_shows_confirmation(self):
+        self.client.login(username="author1", password="password123")
+        response = self.client.get(
+            reverse("communities:delete_post", args=["MN01", self.post.id])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Delete Post")
+
+
+# ============================================================ #
+#  Sprint 3 – My Posts View
+# ============================================================ #
+
+
+class MyPostsViewTests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        self.user = User.objects.create_user(
+            username="myposter", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        self.post = Post.objects.create(
+            nta=self.nta,
+            author=self.user,
+            title="Heating complaint XYZ",
+            content="Content",
+        )
+
+    def test_requires_login(self):
+        response = self.client.get(reverse("communities:my_posts"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_shows_user_posts(self):
+        self.client.login(username="myposter", password="password123")
+        response = self.client.get(reverse("communities:my_posts"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Heating complaint XYZ")
+
+    def test_excludes_deleted_posts(self):
+        self.post.is_active = False
+        self.post.save()
+        self.client.login(username="myposter", password="password123")
+        response = self.client.get(reverse("communities:my_posts"))
+        self.assertNotContains(response, "Heating complaint XYZ")
+
+    def test_excludes_other_users_posts(self):
+        other = User.objects.create_user(username="other", password="password123")
+        Post.objects.create(nta=self.nta, author=other, title="Not Mine", content="x")
+        self.client.login(username="myposter", password="password123")
+        response = self.client.get(reverse("communities:my_posts"))
+        self.assertNotContains(response, "Not Mine")
+
+
+# ============================================================ #
+#  Sprint 3 – Community API Endpoints
+# ============================================================ #
+
+
+class CommunityAPITests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        self.community = Community.objects.create(nta=self.nta, name="Inwood Community")
+        self.user = User.objects.create_user(
+            username="apiuser", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        VerificationRequest.objects.create(
+            user=self.user,
+            nta_code="MN01",
+            status=VerificationRequest.STATUS_APPROVED,
+            document_type="lease",
+        )
+        CommunityMembership.objects.create(community=self.community, user=self.user)
+        self.post = Post.objects.create(
+            nta=self.nta, author=self.user, title="API Test Post", content="Hello"
+        )
+
+    def test_community_list_api(self):
+        response = self.client.get(reverse("communities:api_community_list"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["communities"]), 1)
+        self.assertEqual(data["communities"][0]["name"], "Inwood Community")
+
+    def test_community_detail_api(self):
+        response = self.client.get(
+            reverse("communities:api_community_detail", args=["MN01"])
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["name"], "Inwood Community")
+
+    def test_community_detail_api_404(self):
+        response = self.client.get(
+            reverse("communities:api_community_detail", args=["ZZ99"])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_community_posts_api(self):
+        response = self.client.get(
+            reverse("communities:api_community_posts", args=["MN01"])
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertGreaterEqual(len(data["posts"]), 1)
+
+    def test_my_community_api_unauthenticated(self):
+        response = self.client.get(reverse("communities:api_my_community"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data.get("has_community"))
+
+    def test_my_community_api_authenticated(self):
+        self.client.login(username="apiuser", password="password123")
+        response = self.client.get(reverse("communities:api_my_community"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get("has_community"))
+
+    def test_my_posts_api_unauthenticated(self):
+        response = self.client.get(reverse("communities:api_my_posts"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_my_posts_api_authenticated(self):
+        self.client.login(username="apiuser", password="password123")
+        response = self.client.get(reverse("communities:api_my_posts"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertGreaterEqual(len(data["posts"]), 1)
+
+
+# ============================================================ #
+#  Sprint 3 – Post Category Field
+# ============================================================ #
+
+
+class PostCategoryTests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        self.user = User.objects.create_user(
+            username="catuser", password="password123", role=User.ROLE_VERIFIED_TENANT
+        )
+        VerificationRequest.objects.create(
+            user=self.user,
+            nta_code="MN01",
+            status=VerificationRequest.STATUS_APPROVED,
+            document_type="lease",
+        )
+
+    def test_create_post_with_category(self):
+        self.client.login(username="catuser", password="password123")
+        response = self.client.post(
+            reverse("communities:create_post", args=["MN01"]),
+            {
+                "title": "Maintenance Post",
+                "content": "Content",
+                "category": "maintenance",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        post = Post.objects.get(title="Maintenance Post")
+        self.assertEqual(post.category, "maintenance")
+
+    def test_default_category_is_general(self):
+        post = Post.objects.create(
+            nta=self.nta, author=self.user, title="Default Cat", content="x"
+        )
+        self.assertEqual(post.category, "general")

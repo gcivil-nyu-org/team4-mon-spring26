@@ -10,20 +10,28 @@ cd /var/app/current
 
 # Log file
 LOG_FILE="/var/log/eb-postdeploy.log"
+SETUP_MARKER="/tmp/tenantguard-community-setup-done"
 
-echo "$(date): Starting post-deployment data setup" >> $LOG_FILE
+echo "$(date): Starting post-deployment setup" >> $LOG_FILE
 
-# Run migrations (should already be done, but just in case)
+# Run migrations (fast, always needed)
 python manage.py migrate --noinput >> $LOG_FILE 2>&1
 
-# Check if this is first deployment (no data yet)
-DATA_EXISTS=$(python manage.py shell -c "from mapview.models import NTARiskScore; print(NTARiskScore.objects.exists())" 2>/dev/null || echo "False")
+echo "$(date): Migrations complete" >> $LOG_FILE
 
-if [ "$DATA_EXISTS" = "False" ]; then
-    echo "$(date): First deployment detected, ingesting initial data..." >> $LOG_FILE
-    python manage.py ingest_all --limit 2000 >> $LOG_FILE 2>&1 || echo "$(date): Data ingestion failed (non-critical)" >> $LOG_FILE
+# Only run community setup once (marker file approach to avoid DB queries)
+# This avoids overhead on frequent deployments
+if [ ! -f "$SETUP_MARKER" ]; then
+    echo "$(date): First deployment detected, running community setup in background..." >> $LOG_FILE
+    nohup bash -c "
+        sleep 5
+        python manage.py create_nta_communities >> $LOG_FILE 2>&1 && \
+        python manage.py assign_user_communities >> $LOG_FILE 2>&1 && \
+        touch $SETUP_MARKER && \
+        echo \"\$(date): Background community setup complete\" >> $LOG_FILE
+    " &
 else
-    echo "$(date): Data already exists, skipping initial ingestion" >> $LOG_FILE
+    echo "$(date): Community setup already completed, skipping" >> $LOG_FILE
 fi
 
 echo "$(date): Post-deployment setup complete" >> $LOG_FILE

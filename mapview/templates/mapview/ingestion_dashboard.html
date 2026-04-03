@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Data Ingestion Dashboard - TenantGuard{% endblock %}
+
+{% block content %}
+<div style="max-width:1100px;margin:2rem auto;padding:0 1rem;">
+  <h1 style="font-size:1.5rem;margin-bottom:1.5rem;">Data Ingestion Dashboard</h1>
+
+  <!-- DB Statistics -->
+  <div id="stats-panel" class="card" style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1.1rem;margin-bottom:0.75rem;">Database Statistics</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;" id="stats-grid">
+      <div class="stat-box"><span class="stat-label">HPD Violations</span><span class="stat-value" id="stat-hpd">—</span></div>
+      <div class="stat-box"><span class="stat-label">311 Complaints</span><span class="stat-value" id="stat-311">—</span></div>
+      <div class="stat-box"><span class="stat-label">Scored Neighborhoods</span><span class="stat-value" id="stat-nta">—</span></div>
+      <div class="stat-box"><span class="stat-label">Last Ingestion</span><span class="stat-value" id="stat-last" style="font-size:0.85rem;">—</span></div>
+    </div>
+    <div style="margin-top:0.75rem;font-size:0.82rem;color:#64748b;">
+      <span id="stat-hpd-range"></span> · <span id="stat-311-range"></span>
+    </div>
+  </div>
+
+  <!-- Manual Ingestion -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1.1rem;margin-bottom:0.75rem;">Manual Ingestion</h2>
+    <form id="ingest-form" style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Record Limit</label>
+        <input type="number" id="ingest-limit" value="10000" min="1000" max="500000" step="1000"
+               style="width:120px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Sources</label>
+        <select id="ingest-sources" style="padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+          <option value="both">Both (HPD + 311)</option>
+          <option value="hpd_only">HPD Only</option>
+          <option value="311_only">311 Only</option>
+        </select>
+      </div>
+      <button type="submit" id="ingest-btn" class="btn btn-primary" style="padding:0.45rem 1.2rem;">
+        Start Ingestion
+      </button>
+    </form>
+  </div>
+
+  <!-- Live Status -->
+  <div class="card" style="margin-bottom:1.5rem;" id="status-panel" style="display:none;">
+    <h2 style="font-size:1.1rem;margin-bottom:0.75rem;">Current Job Status</h2>
+    <div id="status-idle" style="color:#64748b;">Idle — no job running.</div>
+    <div id="status-running" style="display:none;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+        <span id="status-step" style="font-weight:600;"></span>
+        <span id="status-elapsed" style="color:#64748b;font-size:0.85rem;"></span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:0.5rem;height:1.2rem;overflow:hidden;margin-bottom:0.5rem;">
+        <div id="status-bar" style="background:#2563eb;height:100%;border-radius:0.5rem;transition:width 0.3s;width:0%;"></div>
+      </div>
+      <div style="font-size:0.85rem;color:#475569;" id="status-counts"></div>
+    </div>
+    <div id="status-done" style="display:none;">
+      <div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:0.4rem;" id="status-summary"></div>
+    </div>
+    <div id="status-error" style="display:none;">
+      <div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:0.4rem;color:#dc2626;" id="status-error-msg"></div>
+    </div>
+  </div>
+
+  <!-- Score Settings -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1.1rem;margin-bottom:0.75rem;">Score Settings</h2>
+    <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;">
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Data Recency Window</label>
+        <select id="recency-select" style="padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+          {% for value, label in recency_choices %}
+            <option value="{{ value }}" {% if value == current_recency %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button id="recency-btn" class="btn btn-primary" style="padding:0.45rem 1rem;">Update Recency</button>
+      <span id="recency-msg" style="font-size:0.85rem;color:#16a34a;"></span>
+    </div>
+    <p style="font-size:0.8rem;color:#64748b;margin-top:0.5rem;">
+      Controls which records are included when computing livability scores. Changing this triggers a background recompute.
+    </p>
+  </div>
+
+  <!-- Schedule Config -->
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2 style="font-size:1.1rem;margin-bottom:0.75rem;">Scheduled Ingestion</h2>
+    <form id="schedule-form" style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Enabled</label>
+        <input type="checkbox" id="sched-enabled" style="width:1.2rem;height:1.2rem;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Every</label>
+        <div style="display:flex;gap:0.3rem;">
+          <input type="number" id="sched-interval" value="7" min="1" max="365"
+                 style="width:60px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+          <select id="sched-unit" style="padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+            <option value="days">Days</option>
+            <option value="hours">Hours</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Run Time (UTC)</label>
+        <input type="time" id="sched-time" value="03:00"
+               style="padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;display:block;margin-bottom:0.25rem;">Record Limit</label>
+        <input type="number" id="sched-limit" value="10000" min="1000" max="500000" step="1000"
+               style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:0.3rem;">
+      </div>
+      <button type="submit" class="btn btn-primary" style="padding:0.45rem 1rem;">Save Schedule</button>
+    </form>
+    <div id="sched-info" style="font-size:0.82rem;color:#64748b;margin-top:0.5rem;"></div>
+  </div>
+
+  <!-- History Table -->
+  <div class="card">
+    <h2 style="font-size:1.1rem;margin-bottom:0.75rem;">Ingestion History</h2>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.82rem;" id="history-table">
+        <thead>
+          <tr style="border-bottom:2px solid #e2e8f0;text-align:left;">
+            <th style="padding:0.5rem;">ID</th>
+            <th style="padding:0.5rem;">Trigger</th>
+            <th style="padding:0.5rem;">Sources</th>
+            <th style="padding:0.5rem;">Status</th>
+            <th style="padding:0.5rem;">HPD</th>
+            <th style="padding:0.5rem;">311</th>
+            <th style="padding:0.5rem;">NTAs</th>
+            <th style="padding:0.5rem;">Duration</th>
+            <th style="padding:0.5rem;">Started</th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:0.5rem;padding:1.25rem;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+  .stat-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.4rem;padding:0.75rem;text-align:center;}
+  .stat-label{display:block;font-size:0.78rem;color:#64748b;margin-bottom:0.25rem;}
+  .stat-value{display:block;font-size:1.3rem;font-weight:700;color:#1e293b;}
+  .status-badge{display:inline-block;padding:0.15rem 0.5rem;border-radius:1rem;font-size:0.75rem;font-weight:600;}
+  .status-completed{background:#dcfce7;color:#166534;}
+  .status-failed{background:#fef2f2;color:#991b1b;}
+  .status-running{background:#dbeafe;color:#1e40af;}
+  .status-pending{background:#fef9c3;color:#854d0e;}
+</style>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+const API = {
+  status: '/api/ingestion/status/',
+  start: '/api/ingestion/start/',
+  history: '/api/ingestion/history/',
+  stats: '/api/ingestion/stats/',
+  schedule: '/api/ingestion/schedule/',
+  recency: '/api/ingestion/recency/',
+};
+
+let pollTimer = null;
+
+async function fetchJSON(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF, ...opts.headers},
+    ...opts,
+  });
+  return res.json();
+}
+
+function fmtNum(n) { return n != null ? n.toLocaleString() : '—'; }
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+function fmtDuration(sec) {
+  if (!sec) return '—';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// === Stats ===
+async function loadStats() {
+  const d = await fetchJSON(API.stats);
+  document.getElementById('stat-hpd').textContent = fmtNum(d.hpd_violations);
+  document.getElementById('stat-311').textContent = fmtNum(d.complaints_311);
+  document.getElementById('stat-nta').textContent = fmtNum(d.scored_neighborhoods);
+  document.getElementById('stat-last').textContent = fmtDate(d.last_ingestion);
+  document.getElementById('stat-hpd-range').textContent =
+    `HPD: ${d.hpd_date_range.oldest || '—'} → ${d.hpd_date_range.newest || '—'}`;
+  document.getElementById('stat-311-range').textContent =
+    `311: ${(d.complaints_date_range.oldest||'').split('T')[0] || '—'} → ${(d.complaints_date_range.newest||'').split('T')[0] || '—'}`;
+}
+
+// === Status polling ===
+async function pollStatus() {
+  const d = await fetchJSON(API.status);
+  const idle = document.getElementById('status-idle');
+  const running = document.getElementById('status-running');
+  const done = document.getElementById('status-done');
+  const errDiv = document.getElementById('status-error');
+
+  idle.style.display = 'none';
+  running.style.display = 'none';
+  done.style.display = 'none';
+  errDiv.style.display = 'none';
+
+  if (!d.job || d.status === 'idle') {
+    idle.style.display = '';
+    document.getElementById('ingest-btn').disabled = false;
+    stopPolling();
+    return;
+  }
+
+  const j = d.job;
+  if (j.status === 'running') {
+    running.style.display = '';
+    document.getElementById('ingest-btn').disabled = true;
+    document.getElementById('status-step').textContent = j.current_step;
+    document.getElementById('status-elapsed').textContent = fmtDuration(j.elapsed_seconds);
+    const pct = j.records_target > 0 ? Math.min(100, (j.records_fetched / j.records_target) * 100) : 0;
+    document.getElementById('status-bar').style.width = pct.toFixed(1) + '%';
+    document.getElementById('status-counts').textContent =
+      `${fmtNum(j.records_fetched)} / ${fmtNum(j.records_target)} records · Batch ${j.current_batch}/${j.total_batches} · HPD: +${fmtNum(j.hpd_created)} · 311: +${fmtNum(j.complaints_created)}`;
+    startPolling();
+  } else if (j.status === 'completed') {
+    done.style.display = '';
+    document.getElementById('ingest-btn').disabled = false;
+    document.getElementById('status-summary').innerHTML =
+      `<strong>Completed</strong> in ${fmtDuration(j.elapsed_seconds)}<br>` +
+      `HPD: ${fmtNum(j.hpd_created)} created, ${fmtNum(j.hpd_updated)} updated<br>` +
+      `311: ${fmtNum(j.complaints_created)} created, ${fmtNum(j.complaints_updated)} updated<br>` +
+      `Neighborhoods scored: ${fmtNum(j.neighborhoods_scored)}`;
+    stopPolling();
+    loadStats();
+    loadHistory();
+  } else if (j.status === 'failed') {
+    errDiv.style.display = '';
+    document.getElementById('ingest-btn').disabled = false;
+    document.getElementById('status-error-msg').textContent = 'Failed: ' + (j.error_message || 'Unknown error');
+    stopPolling();
+  } else {
+    idle.style.display = '';
+    document.getElementById('ingest-btn').disabled = false;
+  }
+}
+
+function startPolling() { if (!pollTimer) pollTimer = setInterval(pollStatus, 4000); }
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+// === Start ingestion ===
+document.getElementById('ingest-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const limit = parseInt(document.getElementById('ingest-limit').value) || 10000;
+  const sources = document.getElementById('ingest-sources').value;
+  document.getElementById('ingest-btn').disabled = true;
+  await fetchJSON(API.start, { method: 'POST', body: JSON.stringify({ limit, sources }) });
+  setTimeout(pollStatus, 500);
+  startPolling();
+});
+
+// === Recency ===
+document.getElementById('recency-btn').addEventListener('click', async () => {
+  const val = document.getElementById('recency-select').value;
+  const d = await fetchJSON(API.recency, { method: 'POST', body: JSON.stringify({ recency_window: val }) });
+  document.getElementById('recency-msg').textContent = d.message || 'Updated';
+  setTimeout(() => document.getElementById('recency-msg').textContent = '', 4000);
+  if (d.message && d.message.includes('Recompute')) startPolling();
+});
+
+// === Schedule ===
+async function loadSchedule() {
+  const d = await fetchJSON(API.schedule);
+  document.getElementById('sched-enabled').checked = d.is_enabled;
+  document.getElementById('sched-interval').value = d.interval_value;
+  document.getElementById('sched-unit').value = d.interval_unit;
+  document.getElementById('sched-time').value = d.run_time;
+  document.getElementById('sched-limit').value = d.record_limit;
+  let info = d.is_enabled ? 'Enabled' : 'Disabled';
+  if (d.next_run_at) info += ' · Next run: ' + fmtDate(d.next_run_at);
+  if (d.last_run_at) info += ' · Last run: ' + fmtDate(d.last_run_at);
+  document.getElementById('sched-info').textContent = info;
+}
+
+document.getElementById('schedule-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    is_enabled: document.getElementById('sched-enabled').checked,
+    interval_value: parseInt(document.getElementById('sched-interval').value),
+    interval_unit: document.getElementById('sched-unit').value,
+    run_time: document.getElementById('sched-time').value,
+    record_limit: parseInt(document.getElementById('sched-limit').value),
+  };
+  await fetchJSON(API.schedule, { method: 'POST', body: JSON.stringify(body) });
+  loadSchedule();
+});
+
+// === History ===
+async function loadHistory() {
+  const d = await fetchJSON(API.history);
+  const tbody = document.getElementById('history-body');
+  tbody.innerHTML = '';
+  (d.history || []).forEach(j => {
+    const cls = `status-badge status-${j.status}`;
+    const row = `<tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:0.4rem 0.5rem;">#${j.id}</td>
+      <td style="padding:0.4rem 0.5rem;">${j.trigger_type}</td>
+      <td style="padding:0.4rem 0.5rem;">${j.sources}</td>
+      <td style="padding:0.4rem 0.5rem;"><span class="${cls}">${j.status}</span></td>
+      <td style="padding:0.4rem 0.5rem;">${fmtNum(j.hpd_created)}/${fmtNum(j.hpd_updated)}</td>
+      <td style="padding:0.4rem 0.5rem;">${fmtNum(j.complaints_created)}/${fmtNum(j.complaints_updated)}</td>
+      <td style="padding:0.4rem 0.5rem;">${fmtNum(j.neighborhoods_scored)}</td>
+      <td style="padding:0.4rem 0.5rem;">${fmtDuration(j.elapsed_seconds)}</td>
+      <td style="padding:0.4rem 0.5rem;">${fmtDate(j.started_at)}</td>
+    </tr>`;
+    tbody.insertAdjacentHTML('beforeend', row);
+  });
+  if (!d.history || d.history.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="padding:1rem;text-align:center;color:#94a3b8;">No ingestion history yet.</td></tr>';
+  }
+}
+
+// === Init ===
+loadStats();
+pollStatus();
+loadSchedule();
+loadHistory();
+</script>
+{% endblock %}

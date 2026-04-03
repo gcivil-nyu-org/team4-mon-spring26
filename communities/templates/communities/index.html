@@ -1,24 +1,96 @@
 {% extends 'communities/base_communities.html' %}
 
-{% block title %}Area-Based Communities - TenantGuard{% endblock %}
+{% block title %}Communities - TenantGuard{% endblock %}
 
 {% block content %}
 <div class="community-container">
-  <div class="community-card">
-    <h2>Area-Based Communities</h2>
-    <p class="lead">Connect with verified tenants in your neighborhood to discuss local housing issues and organize collective action.</p>
 
-    <h5 class="community-section-header">Neighborhood Forums</h5>
-    <div class="community-list">
-      {% for nta in ntas %}
-        <a href="{% url 'communities:nta_forum' nta.nta_code %}" class="community-list-item">
-          {{ nta.nta_name }} ({{ nta.borough }})
-          <span class="count-badge">{{ nta.posts.count }} posts</span>
-        </a>
-      {% empty %}
-        <div class="community-empty">No neighborhoods available yet.</div>
-      {% endfor %}
+  <!-- My Community -->
+  {% if user.is_authenticated %}
+    <div class="community-card" style="margin-bottom:1.5rem;border-left:4px solid #2563eb;">
+      {% if my_community %}
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+          <div>
+            <h2 style="font-size:1.2rem;margin:0;">My Community: {{ my_community.name }}</h2>
+            <p style="margin:0.25rem 0;color:#64748b;font-size:0.88rem;">
+              {{ my_nta.borough }} ·
+              <span class="risk-badge risk-{{ my_nta.risk_score|floatformat:0 }}">Score: {{ my_nta.risk_score }}/10</span>
+              · {{ my_community.member_count }} members · {{ my_community.post_count }} posts
+            </p>
+          </div>
+          <div style="display:flex;gap:0.5rem;">
+            <a href="{% url 'communities:nta_forum' my_nta.nta_code %}" class="btn btn-primary btn-sm">View My Community</a>
+            <a href="{% url 'communities:create_post' my_nta.nta_code %}" class="btn btn-sm" style="background:#16a34a;color:#fff;">New Post</a>
+          </div>
+        </div>
+      {% elif user.is_verified_tenant %}
+        <p style="color:#64748b;margin:0;">Your neighborhood community hasn't been set up yet. Check back soon!</p>
+      {% else %}
+        <p style="margin:0;">
+          <a href="{% url 'request-verification' %}" style="color:#2563eb;font-weight:600;">Verify your address</a>
+          to join your neighborhood community and start discussions.
+        </p>
+      {% endif %}
     </div>
+  {% elif not user.is_authenticated %}
+    <div class="community-card" style="margin-bottom:1.5rem;border-left:4px solid #94a3b8;">
+      <p style="margin:0;">
+        <a href="{% url 'login' %}" style="color:#2563eb;font-weight:600;">Sign in</a> or
+        <a href="{% url 'register' %}" style="color:#2563eb;font-weight:600;">register</a>
+        to join your neighborhood community.
+      </p>
+    </div>
+  {% endif %}
+
+  <!-- Browse All Communities -->
+  <div class="community-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+      <h2 style="font-size:1.15rem;margin:0;">Browse All Communities</h2>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <form method="get" style="display:flex;gap:0.4rem;">
+          <input type="text" name="q" value="{{ search }}" placeholder="Search neighborhoods..."
+                 class="form-control" style="width:180px;padding:0.35rem 0.6rem;font-size:0.85rem;">
+          <select name="sort" class="form-control" style="padding:0.35rem;font-size:0.85rem;" onchange="this.form.submit()">
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>A-Z</option>
+            <option value="most_active" {% if sort == 'most_active' %}selected{% endif %}>Most Active</option>
+            <option value="most_members" {% if sort == 'most_members' %}selected{% endif %}>Most Members</option>
+            <option value="highest_risk" {% if sort == 'highest_risk' %}selected{% endif %}>Highest Risk</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-primary" style="padding:0.35rem 0.7rem;">Go</button>
+        </form>
+      </div>
+    </div>
+
+    {% if communities %}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;">
+        {% for c in communities %}
+          <a href="{% url 'communities:nta_forum' c.nta.nta_code %}" class="community-grid-item" style="text-decoration:none;color:inherit;display:block;border:1px solid #e2e8f0;border-radius:0.4rem;padding:0.85rem;transition:box-shadow 0.15s;">
+            <div style="font-weight:600;font-size:0.95rem;margin-bottom:0.25rem;">{{ c.name }}</div>
+            <div style="font-size:0.8rem;color:#64748b;">
+              {{ c.nta.borough }}
+              · <span class="risk-badge-sm" style="{% if c.nta.risk_score <= 3.0 %}color:#dc2626{% elif c.nta.risk_score <= 6.0 %}color:#d97706{% else %}color:#16a34a{% endif %}">{{ c.nta.risk_score }}/10</span>
+              · {{ c.active_members }} members · {{ c.active_posts }} posts
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% elif ntas %}
+      <div class="community-list">
+        {% for nta in ntas %}
+          <a href="{% url 'communities:nta_forum' nta.nta_code %}" class="community-list-item">
+            {{ nta.nta_name }} ({{ nta.borough }})
+            <span class="count-badge">{{ nta.posts.count }} posts</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="community-empty">No communities match your search.</div>
+    {% endif %}
   </div>
 </div>
+
+<style>
+  .community-grid-item:hover{box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+  .risk-badge{display:inline-block;padding:0.1rem 0.4rem;border-radius:1rem;font-size:0.78rem;font-weight:600;background:#f1f5f9;}
+</style>
 {% endblock %}
