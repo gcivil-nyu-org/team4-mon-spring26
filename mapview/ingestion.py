@@ -136,23 +136,31 @@ def _execute_job(job_id):
 
 
 def _parse_date(value):
+    """Parse date from NYC Open Data API format (e.g., '2024-03-15T00:00:00.000')."""
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.split("T")[0]).date()
-    except (ValueError, AttributeError):
+        # Extract date portion before 'T'
+        date_str = value.split("T")[0] if "T" in value else value
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (ValueError, AttributeError, TypeError):
         return None
 
 
 def _parse_datetime(value):
+    """Parse datetime from NYC Open Data API format (e.g., '2024-03-15T14:30:00.000')."""
     if not value:
         return None
     try:
-        dt = datetime.fromisoformat(value.replace("T", " ").split(".")[0])
-        if dt.tzinfo is None:
-            dt = timezone.make_aware(dt, timezone.utc)
-        return dt
-    except (ValueError, AttributeError):
+        # Remove milliseconds if present
+        clean_value = value.split(".")[0] if "." in value else value
+        # Parse ISO format datetime
+        dt = datetime.strptime(clean_value, "%Y-%m-%dT%H:%M:%S")
+        # Make timezone-aware (NYC Open Data uses UTC)
+        import pytz
+
+        return timezone.make_aware(dt, pytz.UTC)
+    except (ValueError, AttributeError, TypeError):
         return None
 
 

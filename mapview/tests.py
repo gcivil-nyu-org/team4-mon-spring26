@@ -1372,3 +1372,78 @@ class LandlordPortfolioTests(TestCase):
         data = response.json()
         self.assertEqual(data["building_count"], 2)
         self.assertEqual(data["total_violations"], 2)
+
+
+# ============================================================ #
+#  Date Parsing Tests
+# ============================================================ #
+
+
+class DateParsingTests(TestCase):
+    def test_parse_date_with_timestamp(self):
+        from mapview.ingestion import _parse_date
+
+        result = _parse_date("2024-03-15T00:00:00.000")
+        self.assertEqual(result, date(2024, 3, 15))
+
+    def test_parse_date_without_timestamp(self):
+        from mapview.ingestion import _parse_date
+
+        result = _parse_date("2024-03-15")
+        self.assertEqual(result, date(2024, 3, 15))
+
+    def test_parse_date_none(self):
+        from mapview.ingestion import _parse_date
+
+        result = _parse_date(None)
+        self.assertIsNone(result)
+
+    def test_parse_date_empty_string(self):
+        from mapview.ingestion import _parse_date
+
+        result = _parse_date("")
+        self.assertIsNone(result)
+
+    def test_parse_date_invalid(self):
+        from mapview.ingestion import _parse_date
+
+        result = _parse_date("invalid-date")
+        self.assertIsNone(result)
+
+    def test_parse_datetime_with_milliseconds(self):
+        from mapview.ingestion import _parse_datetime
+
+        result = _parse_datetime("2024-03-15T14:30:00.000")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.year, 2024)
+        self.assertEqual(result.month, 3)
+        self.assertEqual(result.day, 15)
+        self.assertEqual(result.hour, 14)
+        self.assertEqual(result.minute, 30)
+        self.assertIsNotNone(result.tzinfo)
+
+    def test_parse_datetime_without_milliseconds(self):
+        from mapview.ingestion import _parse_datetime
+
+        result = _parse_datetime("2024-03-15T14:30:00")
+        self.assertIsNotNone(result)
+        self.assertEqual(result.hour, 14)
+        self.assertEqual(result.minute, 30)
+
+    def test_parse_datetime_none(self):
+        from mapview.ingestion import _parse_datetime
+
+        result = _parse_datetime(None)
+        self.assertIsNone(result)
+
+    def test_parse_datetime_empty_string(self):
+        from mapview.ingestion import _parse_datetime
+
+        result = _parse_datetime("")
+        self.assertIsNone(result)
+
+    def test_parse_datetime_invalid(self):
+        from mapview.ingestion import _parse_datetime
+
+        result = _parse_datetime("not-a-datetime")
+        self.assertIsNone(result)
