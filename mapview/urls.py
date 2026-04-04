@@ -18,11 +18,26 @@ from .views_ingestion import (
     ingestion_stats_view,
     ingestion_status_view,
 )
+from .views_landlord import (
+    building_portfolio_view,
+    landlord_portfolio_view,
+    landlord_search_view,
+)
 from .views_map_community import (
     community_activity_view,
     community_preview_view,
     my_marker_view,
     recency_label_view,
+)
+from .views_subscription import (
+    notification_list_view,
+    notification_read_all_view,
+    notification_read_view,
+    risk_changes_view,
+    risk_history_view,
+    subscription_create_view,
+    subscription_list_view,
+    subscription_update_view,
 )
 
 urlpatterns = [
@@ -58,4 +73,50 @@ urlpatterns = [
     ),
     path("api/map/my-marker/", my_marker_view, name="map-my-marker"),
     path("api/map/recency-label/", recency_label_view, name="map-recency-label"),
+    # Risk History (Epic #5)
+    path("api/risk-history/", risk_history_view, name="risk-history"),
+    path("api/risk-changes/", risk_changes_view, name="risk-changes"),
+    # Subscriptions & Notifications (Epic #8)
+    path(
+        "api/subscriptions/",
+        subscription_list_view,
+        name="subscription-list",
+    ),
+    path(
+        "api/subscriptions/create/",
+        subscription_create_view,
+        name="subscription-create",
+    ),
+    path(
+        "api/subscriptions/<int:pk>/",
+        subscription_update_view,
+        name="subscription-update",
+    ),
+    path(
+        "api/notifications/",
+        notification_list_view,
+        name="notification-list",
+    ),
+    path(
+        "api/notifications/<int:pk>/read/",
+        notification_read_view,
+        name="notification-read",
+    ),
+    path(
+        "api/notifications/read-all/",
+        notification_read_all_view,
+        name="notification-read-all",
+    ),
+    # Landlord Portfolio (Epic #9)
+    path("api/landlord/search/", landlord_search_view, name="landlord-search"),
+    path(
+        "api/landlord/building/",
+        building_portfolio_view,
+        name="building-portfolio",
+    ),
+    path(
+        "api/landlord/portfolio/",
+        landlord_portfolio_view,
+        name="landlord-portfolio",
+    ),
 ]

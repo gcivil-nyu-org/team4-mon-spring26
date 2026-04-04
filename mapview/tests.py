@@ -10,11 +10,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
+    AreaSubscription,
     Complaint311,
     HPDViolation,
     IngestionJob,
     IngestionSchedule,
+    Notification,
     NTARiskScore,
+    RiskScoreHistory,
     ScoreRecencyConfig,
     ScoreThreshold,
 )
@@ -932,3 +935,440 @@ class IngestionDashboardViewTests(TestCase):
         response = self.client.get(reverse("ingestion-dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Data Ingestion Dashboard")
+
+
+# ============================================================ #
+#  Epic #5 – Risk Score History
+# ============================================================ #
+
+
+class RiskScoreHistoryModelTests(TestCase):
+    def test_create_history(self):
+        h = RiskScoreHistory.objects.create(
+            nta_code="MN01",
+            nta_name="Test",
+            risk_score=7.0,
+            previous_score=8.0,
+            score_delta=-1.0,
+        )
+        self.assertIn("MN01", str(h))
+        self.assertIn("-1.0", str(h))
+
+    def test_history_ordering(self):
+        RiskScoreHistory.objects.create(nta_code="MN01", nta_name="A", risk_score=5.0)
+        RiskScoreHistory.objects.create(nta_code="MN01", nta_name="A", risk_score=6.0)
+        latest = RiskScoreHistory.objects.first()
+        self.assertEqual(latest.risk_score, 6.0)
+
+
+class RiskHistoryAPITests(TestCase):
+    def test_history_requires_nta_code(self):
+        response = self.client.get(reverse("risk-history"))
+        self.assertEqual(response.status_code, 400)
+
+    def test_history_returns_records(self):
+        RiskScoreHistory.objects.create(
+            nta_code="MN01", nta_name="Test", risk_score=7.0
+        )
+        response = self.client.get(reverse("risk-history"), {"nta_code": "MN01"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+
+    def test_risk_changes_endpoint(self):
+        RiskScoreHistory.objects.create(
+            nta_code="MN01",
+            nta_name="Test",
+            risk_score=6.0,
+            previous_score=8.0,
+            score_delta=-2.0,
+        )
+        response = self.client.get(reverse("risk-changes"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertGreaterEqual(data["count"], 1)
+
+
+# ============================================================ #
+#  Epic #7 – Scheduled Ingestion Command
+# ============================================================ #
+
+
+class RunScheduledIngestionTests(TestCase):
+    def test_disabled_schedule_does_nothing(self):
+        schedule = IngestionSchedule.load()
+        schedule.is_enabled = False
+        schedule.save()
+        call_command("run_scheduled_ingestion")
+        self.assertEqual(
+            IngestionJob.objects.filter(
+                trigger_type=IngestionJob.TRIGGER_SCHEDULED
+            ).count(),
+            0,
+        )
+
+    def test_not_due_does_nothing(self):
+        from datetime import timedelta
+
+        schedule = IngestionSchedule.load()
+        schedule.is_enabled = True
+        schedule.next_run_at = timezone.now() + timedelta(hours=1)
+        schedule.save()
+        call_command("run_scheduled_ingestion")
+        self.assertEqual(
+            IngestionJob.objects.filter(
+                trigger_type=IngestionJob.TRIGGER_SCHEDULED
+            ).count(),
+            0,
+        )
+
+    @patch("mapview.management.commands.run_scheduled_ingestion.run_ingestion_job")
+    @patch(
+        "mapview.management.commands.run_scheduled_ingestion.is_job_running",
+        return_value=False,
+    )
+    def test_due_schedule_creates_job(self, mock_running, mock_run):
+        from datetime import timedelta
+
+        schedule = IngestionSchedule.load()
+        schedule.is_enabled = True
+        schedule.next_run_at = timezone.now() - timedelta(minutes=5)
+        schedule.save()
+        call_command("run_scheduled_ingestion")
+        self.assertEqual(
+            IngestionJob.objects.filter(
+                trigger_type=IngestionJob.TRIGGER_SCHEDULED
+            ).count(),
+            1,
+        )
+        mock_run.assert_called_once()
+        schedule.refresh_from_db()
+        self.assertIsNotNone(schedule.next_run_at)
+        self.assertIsNotNone(schedule.last_run_at)
+
+
+# ============================================================ #
+#  Epic #8 – Area Subscriptions & Notifications
+# ============================================================ #
+
+
+class AreaSubscriptionModelTests(TestCase):
+    def test_create_subscription(self):
+        user = User.objects.create_user(username="sub1", password="StrongPass99!")
+        sub = AreaSubscription.objects.create(
+            user=user, nta_code="MN01", nta_name="Test"
+        )
+        self.assertIn("sub1", str(sub))
+        self.assertTrue(sub.is_active)
+
+    def test_unique_together(self):
+        user = User.objects.create_user(username="sub2", password="StrongPass99!")
+        AreaSubscription.objects.create(user=user, nta_code="MN01")
+        from django.db import IntegrityError
+
+        with self.assertRaises(IntegrityError):
+            AreaSubscription.objects.create(user=user, nta_code="MN01")
+
+
+class NotificationModelTests(TestCase):
+    def test_create_notification(self):
+        user = User.objects.create_user(username="notif1", password="StrongPass99!")
+        n = Notification.objects.create(user=user, title="Test", message="Hello")
+        self.assertFalse(n.is_read)
+        self.assertIn("notif1", str(n))
+
+
+class SubscriptionAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="subapi", password="StrongPass99!", email="s@t.com"
+        )
+
+    def test_list_unauthenticated(self):
+        response = self.client.get(reverse("subscription-list"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_empty(self):
+        self.client.login(username="subapi", password="StrongPass99!")
+        response = self.client.get(reverse("subscription-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["subscriptions"]), 0)
+
+    def test_create_subscription(self):
+        self.client.login(username="subapi", password="StrongPass99!")
+        response = self.client.post(
+            reverse("subscription-create"),
+            json.dumps({"nta_code": "MN01", "delivery_method": "email"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["nta_code"], "MN01")
+        self.assertTrue(data["created"])
+
+    def test_create_subscription_requires_nta(self):
+        self.client.login(username="subapi", password="StrongPass99!")
+        response = self.client.post(
+            reverse("subscription-create"),
+            json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_subscription(self):
+        self.client.login(username="subapi", password="StrongPass99!")
+        sub = AreaSubscription.objects.create(
+            user=self.user, nta_code="MN01", nta_name="Test"
+        )
+        response = self.client.post(
+            reverse("subscription-update", args=[sub.pk]),
+            json.dumps({"is_active": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_active"])
+
+    def test_delete_subscription(self):
+        self.client.login(username="subapi", password="StrongPass99!")
+        sub = AreaSubscription.objects.create(user=self.user, nta_code="MN01")
+        response = self.client.delete(reverse("subscription-update", args=[sub.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(AreaSubscription.objects.filter(pk=sub.pk).exists())
+
+
+class NotificationAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="notifapi", password="StrongPass99!"
+        )
+
+    def test_list_unauthenticated(self):
+        response = self.client.get(reverse("notification-list"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_notifications(self):
+        self.client.login(username="notifapi", password="StrongPass99!")
+        Notification.objects.create(
+            user=self.user, title="Alert", message="Score changed"
+        )
+        response = self.client.get(reverse("notification-list"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["notifications"]), 1)
+        self.assertEqual(data["unread_count"], 1)
+
+    def test_mark_read(self):
+        self.client.login(username="notifapi", password="StrongPass99!")
+        n = Notification.objects.create(
+            user=self.user, title="Alert", message="Score changed"
+        )
+        response = self.client.post(reverse("notification-read", args=[n.pk]))
+        self.assertEqual(response.status_code, 200)
+        n.refresh_from_db()
+        self.assertTrue(n.is_read)
+
+    def test_mark_all_read(self):
+        self.client.login(username="notifapi", password="StrongPass99!")
+        Notification.objects.create(user=self.user, title="A1", message="m")
+        Notification.objects.create(user=self.user, title="A2", message="m")
+        response = self.client.post(reverse("notification-read-all"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            Notification.objects.filter(user=self.user, is_read=False).count(),
+            0,
+        )
+
+    def test_unread_filter(self):
+        self.client.login(username="notifapi", password="StrongPass99!")
+        Notification.objects.create(
+            user=self.user, title="Read", message="m", is_read=True
+        )
+        Notification.objects.create(
+            user=self.user, title="Unread", message="m", is_read=False
+        )
+        response = self.client.get(reverse("notification-list"), {"unread": "true"})
+        data = response.json()
+        self.assertEqual(len(data["notifications"]), 1)
+        self.assertEqual(data["notifications"][0]["title"], "Unread")
+
+
+class RiskChangeAlertTests(TestCase):
+    def test_alerts_created_on_score_change(self):
+        from mapview.ingestion import _send_risk_change_alerts
+
+        user = User.objects.create_user(
+            username="alertuser", password="StrongPass99!", email="a@t.com"
+        )
+        job = IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            status=IngestionJob.STATUS_COMPLETED,
+        )
+        RiskScoreHistory.objects.create(
+            nta_code="MN01",
+            nta_name="Test NTA",
+            risk_score=5.0,
+            previous_score=7.0,
+            score_delta=-2.0,
+            ingestion_job=job,
+        )
+        AreaSubscription.objects.create(
+            user=user,
+            nta_code="MN01",
+            delivery_method=AreaSubscription.DELIVERY_IN_APP,
+            threshold=0.5,
+        )
+
+        _send_risk_change_alerts(job)
+
+        self.assertEqual(Notification.objects.filter(user=user).count(), 1)
+        notif = Notification.objects.get(user=user)
+        self.assertIn("worsened", notif.title)
+
+    def test_no_alert_below_threshold(self):
+        from mapview.ingestion import _send_risk_change_alerts
+
+        user = User.objects.create_user(username="alertuser2", password="StrongPass99!")
+        job = IngestionJob.objects.create(
+            trigger_type=IngestionJob.TRIGGER_MANUAL,
+            status=IngestionJob.STATUS_COMPLETED,
+        )
+        RiskScoreHistory.objects.create(
+            nta_code="MN02",
+            nta_name="Test2",
+            risk_score=7.1,
+            previous_score=7.0,
+            score_delta=0.1,
+            ingestion_job=job,
+        )
+        AreaSubscription.objects.create(
+            user=user,
+            nta_code="MN02",
+            threshold=0.5,
+        )
+
+        _send_risk_change_alerts(job)
+
+        self.assertEqual(Notification.objects.filter(user=user).count(), 0)
+
+
+# ============================================================ #
+#  Epic #9 – Landlord Portfolio
+# ============================================================ #
+
+
+class LandlordSearchTests(TestCase):
+    def test_search_requires_query(self):
+        response = self.client.get(reverse("landlord-search"))
+        self.assertEqual(response.status_code, 400)
+
+    def test_search_short_query(self):
+        response = self.client.get(reverse("landlord-search"), {"q": "ab"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_search_by_street(self):
+        HPDViolation.objects.create(
+            violation_id=5001,
+            bbl="1000010001",
+            house_number="100",
+            street_name="BROADWAY",
+            borough="MANHATTAN",
+            zip_code="10001",
+            violation_class="B",
+        )
+        response = self.client.get(reverse("landlord-search"), {"q": "BROADWAY"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertGreaterEqual(data["count"], 1)
+        self.assertEqual(data["buildings"][0]["bbl"], "1000010001")
+
+    def test_search_with_borough_filter(self):
+        HPDViolation.objects.create(
+            violation_id=5002,
+            bbl="2000010001",
+            house_number="200",
+            street_name="GRAND CONCOURSE",
+            borough="BRONX",
+            violation_class="A",
+        )
+        response = self.client.get(
+            reverse("landlord-search"),
+            {"q": "GRAND", "borough": "BRONX"},
+        )
+        data = response.json()
+        self.assertGreaterEqual(data["count"], 1)
+
+
+class BuildingPortfolioTests(TestCase):
+    def test_requires_bbl(self):
+        response = self.client.get(reverse("building-portfolio"))
+        self.assertEqual(response.status_code, 400)
+
+    def test_building_details(self):
+        HPDViolation.objects.create(
+            violation_id=6001,
+            bbl="1000010001",
+            house_number="100",
+            street_name="BROADWAY",
+            borough="MANHATTAN",
+            zip_code="10001",
+            violation_class="C",
+        )
+        HPDViolation.objects.create(
+            violation_id=6002,
+            bbl="1000010001",
+            house_number="100",
+            street_name="BROADWAY",
+            borough="MANHATTAN",
+            zip_code="10001",
+            violation_class="A",
+        )
+        Complaint311.objects.create(
+            unique_key="C6001",
+            bbl="1000010001",
+            complaint_type="HEAT/HOT WATER",
+        )
+        response = self.client.get(reverse("building-portfolio"), {"bbl": "1000010001"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["summary"]["total_violations"], 2)
+        self.assertEqual(data["summary"]["total_complaints"], 1)
+        self.assertEqual(data["summary"]["class_c_violations"], 1)
+
+    def test_empty_building(self):
+        response = self.client.get(reverse("building-portfolio"), {"bbl": "9999999999"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["summary"]["total_violations"], 0)
+
+
+class LandlordPortfolioTests(TestCase):
+    def test_requires_bbl(self):
+        response = self.client.get(reverse("landlord-portfolio"))
+        self.assertEqual(response.status_code, 400)
+
+    def test_short_bbl_rejected(self):
+        response = self.client.get(reverse("landlord-portfolio"), {"bbl": "123"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_portfolio_aggregates_related_buildings(self):
+        HPDViolation.objects.create(
+            violation_id=7001,
+            bbl="1000010001",
+            house_number="100",
+            street_name="BROADWAY",
+            borough="MANHATTAN",
+            violation_class="B",
+        )
+        HPDViolation.objects.create(
+            violation_id=7002,
+            bbl="1000010002",
+            house_number="102",
+            street_name="BROADWAY",
+            borough="MANHATTAN",
+            violation_class="C",
+        )
+        response = self.client.get(reverse("landlord-portfolio"), {"bbl": "1000010001"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["building_count"], 2)
+        self.assertEqual(data["total_violations"], 2)

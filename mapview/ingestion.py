@@ -111,10 +111,13 @@ def _execute_job(job_id):
         job.save()
 
         recency_config = ScoreRecencyConfig.load()
-        scored = _compute_risk_scores(recency_config)
+        scored = _compute_risk_scores(recency_config, job)
         job.neighborhoods_scored = scored
         recency_config.last_recomputed_at = timezone.now()
         recency_config.save()
+
+        # Send alerts for significant score changes
+        _send_risk_change_alerts(job)
 
         job.status = IngestionJob.STATUS_COMPLETED
         job.completed_at = timezone.now()
@@ -342,12 +345,17 @@ def _ingest_311(job, limit):
     return created, updated
 
 
-def _compute_risk_scores(recency_config=None):
+def _compute_risk_scores(recency_config=None, job=None):
     """Compute risk scores with optional recency filter. Returns count scored."""
     import json
     from pathlib import Path
 
-    from mapview.models import Complaint311, HPDViolation, NTARiskScore
+    from mapview.models import (
+        Complaint311,
+        HPDViolation,
+        NTARiskScore,
+        RiskScoreHistory,
+    )
 
     nta_geojson_path = (
         Path(settings.BASE_DIR) / "data" / "processed" / "nyc_nta_phase1.geojson"
@@ -369,6 +377,12 @@ def _compute_risk_scores(recency_config=None):
                 "nta_name": props.get("nta_name", ""),
                 "borough": props.get("borough", ""),
             }
+
+    # Snapshot existing scores before recomputation
+    old_scores = {
+        s.nta_code: s.risk_score
+        for s in NTARiskScore.objects.filter(nta_code__in=nta_lookup.keys())
+    }
 
     # Spatial assignment of untagged records
     _assign_nta_codes_spatial(nta_data)
@@ -439,9 +453,87 @@ def _compute_risk_scores(recency_config=None):
                 "summary": summary,
             },
         )
+
+        # Record score history
+        previous = old_scores.get(nta_code)
+        delta = round(risk_score - previous, 1) if previous is not None else 0.0
+        RiskScoreHistory.objects.create(
+            nta_code=nta_code,
+            nta_name=info["nta_name"],
+            risk_score=risk_score,
+            previous_score=previous,
+            score_delta=delta,
+            total_violations=total_violations,
+            total_complaints=total_complaints,
+            ingestion_job=job,
+        )
+
         scored += 1
 
     return scored
+
+
+def _send_risk_change_alerts(job):
+    """Send notifications to users subscribed to areas with significant changes."""
+    from django.core.mail import send_mail
+
+    from mapview.models import AreaSubscription, Notification, RiskScoreHistory
+
+    # Get all history records from this job that have significant changes
+    changes = RiskScoreHistory.objects.filter(ingestion_job=job).exclude(
+        score_delta=0.0
+    )
+
+    for change in changes:
+        # Find active subscriptions for this NTA
+        subscriptions = AreaSubscription.objects.filter(
+            nta_code=change.nta_code,
+            is_active=True,
+        ).select_related("user")
+
+        for sub in subscriptions:
+            if abs(change.score_delta) < sub.threshold:
+                continue
+
+            direction = "improved" if change.score_delta > 0 else "worsened"
+            title = f"Risk score {direction} for {change.nta_name}"
+            message = (
+                f"The risk score for {change.nta_name} ({change.nta_code}) "
+                f"has changed from {change.previous_score}/10 to "
+                f"{change.risk_score}/10 ({change.score_delta:+.1f}). "
+                f"Current stats: {change.total_violations} violations, "
+                f"{change.total_complaints} complaints."
+            )
+
+            # In-app notification
+            if sub.delivery_method in (
+                AreaSubscription.DELIVERY_IN_APP,
+                AreaSubscription.DELIVERY_BOTH,
+            ):
+                Notification.objects.create(
+                    user=sub.user,
+                    notification_type=Notification.TYPE_RISK_CHANGE,
+                    title=title,
+                    message=message,
+                    nta_code=change.nta_code,
+                )
+
+            # Email notification
+            if sub.delivery_method in (
+                AreaSubscription.DELIVERY_EMAIL,
+                AreaSubscription.DELIVERY_BOTH,
+            ):
+                if sub.user.email:
+                    try:
+                        send_mail(
+                            subject=f"TenantGuard: {title}",
+                            message=message,
+                            from_email=None,
+                            recipient_list=[sub.user.email],
+                            fail_silently=True,
+                        )
+                    except Exception:
+                        logger.warning("Failed to send email to %s", sub.user.email)
 
 
 def _assign_nta_codes_spatial(nta_data):

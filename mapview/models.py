@@ -282,3 +282,105 @@ class ScoreRecencyConfig(models.Model):
         }
         delta = mapping.get(self.recency_window)
         return (now - delta) if delta else None
+
+
+class RiskScoreHistory(models.Model):
+    """Snapshot of an NTA risk score at a point in time."""
+
+    nta_code = models.CharField(max_length=10, db_index=True)
+    nta_name = models.CharField(max_length=100)
+    risk_score = models.FloatField()
+    previous_score = models.FloatField(null=True, blank=True)
+    score_delta = models.FloatField(default=0.0)
+    total_violations = models.IntegerField(default=0)
+    total_complaints = models.IntegerField(default=0)
+    ingestion_job = models.ForeignKey(
+        IngestionJob,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="score_history",
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-recorded_at"]
+        verbose_name = "Risk Score History"
+        verbose_name_plural = "Risk Score Histories"
+        indexes = [
+            models.Index(fields=["nta_code", "-recorded_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.nta_code} {self.risk_score}/10 ({self.score_delta:+.1f})"
+
+
+class AreaSubscription(models.Model):
+    """User subscription to risk alerts for a specific NTA area."""
+
+    DELIVERY_EMAIL = "email"
+    DELIVERY_IN_APP = "in_app"
+    DELIVERY_BOTH = "both"
+    DELIVERY_CHOICES = [
+        (DELIVERY_EMAIL, "Email"),
+        (DELIVERY_IN_APP, "In-App"),
+        (DELIVERY_BOTH, "Both"),
+    ]
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="area_subscriptions",
+    )
+    nta_code = models.CharField(max_length=10, db_index=True)
+    nta_name = models.CharField(max_length=100, blank=True, default="")
+    delivery_method = models.CharField(
+        max_length=10, choices=DELIVERY_CHOICES, default=DELIVERY_IN_APP
+    )
+    threshold = models.FloatField(
+        default=0.5,
+        help_text="Minimum score change to trigger alert",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "nta_code")
+        verbose_name = "Area Subscription"
+        verbose_name_plural = "Area Subscriptions"
+
+    def __str__(self):
+        return f"{self.user.username} → {self.nta_name or self.nta_code}"
+
+
+class Notification(models.Model):
+    """In-app notification for a user."""
+
+    TYPE_RISK_CHANGE = "risk_change"
+    TYPE_INGESTION = "ingestion"
+    TYPE_CHOICES = [
+        (TYPE_RISK_CHANGE, "Risk Score Change"),
+        (TYPE_INGESTION, "Ingestion Complete"),
+    ]
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    notification_type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default=TYPE_RISK_CHANGE
+    )
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    nta_code = models.CharField(max_length=10, blank=True, default="")
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
+
+    def __str__(self):
+        return f"{self.user.username}: {self.title}"
