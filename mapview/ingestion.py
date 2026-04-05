@@ -8,7 +8,7 @@ Usage:
 import logging
 import math
 import threading
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 
 import requests
 from django.conf import settings
@@ -157,9 +157,7 @@ def _parse_datetime(value):
         # Parse ISO format datetime
         dt = datetime.strptime(clean_value, "%Y-%m-%dT%H:%M:%S")
         # Make timezone-aware (NYC Open Data uses UTC)
-        import pytz
-
-        return timezone.make_aware(dt, pytz.UTC)
+        return dt.replace(tzinfo=dt_timezone.utc)
     except (ValueError, AttributeError, TypeError):
         return None
 
