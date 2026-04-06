@@ -1,11 +1,14 @@
 from django.contrib import admin
 
 from .models import (
+    AreaSubscription,
     Complaint311,
     HPDViolation,
     IngestionJob,
     IngestionSchedule,
+    Notification,
     NTARiskScore,
+    RiskScoreHistory,
     ScoreRecencyConfig,
     ScoreThreshold,
 )
@@ -92,3 +95,45 @@ class IngestionScheduleAdmin(admin.ModelAdmin):
 @admin.register(ScoreRecencyConfig)
 class ScoreRecencyConfigAdmin(admin.ModelAdmin):
     list_display = ["recency_window", "last_recomputed_at", "updated_at"]
+
+
+@admin.register(RiskScoreHistory)
+class RiskScoreHistoryAdmin(admin.ModelAdmin):
+    list_display = [
+        "nta_code",
+        "nta_name",
+        "risk_score",
+        "previous_score",
+        "score_delta",
+        "recorded_at",
+    ]
+    list_filter = ["nta_code"]
+    search_fields = ["nta_code", "nta_name"]
+    readonly_fields = ["recorded_at"]
+
+
+@admin.register(AreaSubscription)
+class AreaSubscriptionAdmin(admin.ModelAdmin):
+    list_display = [
+        "user",
+        "nta_code",
+        "nta_name",
+        "delivery_method",
+        "threshold",
+        "is_active",
+    ]
+    list_filter = ["delivery_method", "is_active"]
+    search_fields = ["user__username", "nta_code", "nta_name"]
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = [
+        "user",
+        "notification_type",
+        "title",
+        "is_read",
+        "created_at",
+    ]
+    list_filter = ["notification_type", "is_read"]
+    search_fields = ["user__username", "title"]
