@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Chat with {{ other_user.username }} - TenantGuard NYC{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+  <div class="chat-card">
+    <h2 style="margin:0 0 1rem;font-size:1.3rem;">Chat with {{ other_user.username }}</h2>
+
+    <div class="chat-messages">
+      {% for msg in chat_messages %}
+        <div class="chat-row {% if msg.sender == user %}sent{% else %}received{% endif %}">
+          <div class="chat-bubble {% if msg.sender == user %}sent{% else %}received{% endif %}">
+            <p style="margin:0;">{{ msg.content }}</p>
+            <span class="chat-time">{{ msg.created_at|date:"H:i" }}</span>
+          </div>
+        </div>
+      {% empty %}
+        <div class="community-empty">No messages yet. Start the conversation!</div>
+      {% endfor %}
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group" style="margin-bottom:0.75rem;">
+        {{ form.content }}
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Send Message</button>
+    </form>
+
+    <p class="auth-footer" style="margin-top:1rem;">
+      <a href="{% url 'communities:inbox' %}">← Back to Inbox</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

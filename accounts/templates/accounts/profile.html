@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - TenantGuard NYC{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+  <div class="profile-card">
+    <h1>
+      {{ user.get_full_name|default:user.username }}
+      {% if user.is_verified_tenant %}<span class="verified-badge" title="Verified Tenant">✅</span>{% endif %}
+    </h1>
+    <span class="profile-role role-{{ user.role }}">{{ user.display_role }}</span>
+
+    {% if form.errors %}
+    <div class="form-errors">
+      <ul>
+        {% for field in form %}
+          {% for error in field.errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div style="display:flex;gap:0.75rem;margin-bottom:0.9rem;">
+        <div class="form-group" style="flex:1;">
+          <label for="id_first_name">First Name</label>
+          {{ form.first_name }}
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label for="id_last_name">Last Name</label>
+          {{ form.last_name }}
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0.9rem;">
+        <label for="id_email">Email</label>
+        {{ form.email }}
+      </div>
+
+      <div class="form-group" style="margin-bottom:0.9rem;">
+        <label for="id_phone_number">Phone Number</label>
+        {{ form.phone_number }}
+      </div>
+
+      <div class="form-group" style="margin-bottom:1.2rem;">
+        <label for="id_bio">Bio</label>
+        {{ form.bio }}
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
+    </form>
+
+    {# ---- Verification section ---- #}
+    <div class="profile-verification-section">
+      {% if user.is_verified_tenant %}
+        <div class="verification-notice notice-approved">
+          <strong>✅ Verified Tenant</strong>
+          {% if user.verified_address %}
+            <p>Verified at: {{ user.verified_address }}</p>
+          {% endif %}
+          <p>You can post, confirm issues, and interact in building communities.</p>
+        </div>
+      {% elif user.has_pending_verification %}
+        <div class="verification-notice notice-pending">
+          <strong>⏳ Verification Pending</strong>
+          <p>Your request is being reviewed by an admin.</p>
+          <a href="{% url 'verification-status' %}" class="btn btn-secondary btn-sm">View Status</a>
+        </div>
+      {% else %}
+        <div class="verification-notice notice-info">
+          <strong>🔒 Not Yet Verified</strong>
+          <p>Verify your residency to unlock posting and community features.</p>
+          <a href="{% url 'request-verification' %}" class="btn btn-primary btn-sm">Request Verification</a>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ---- Verification history ---- #}
+    {% if verification_history %}
+    <div class="profile-vr-history">
+      <h3>Verification History</h3>
+      {% for vr in verification_history %}
+      <div class="vr-card-mini vr-{{ vr.status }}">
+        <span class="vr-badge vr-badge-{{ vr.status }}">
+          {% if vr.is_pending %}⏳{% elif vr.is_approved %}✅{% else %}❌{% endif %} {{ vr.get_status_display }}
+        </span>
+        <span>{{ vr.address|truncatechars:40 }}</span>
+        <span class="vr-date">{{ vr.created_at|date:"M d, Y" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <p class="auth-footer" style="margin-top:1.5rem;">
+      <a href="{% url 'dashboard' %}">← Back to Map</a>
+      {% if user.is_admin_user %}
+        · <a href="{% url 'admin-verification-queue' %}">Admin Queue</a>
+      {% endif %}
+    </p>
+  </div>
+</div>
+{% endblock %}

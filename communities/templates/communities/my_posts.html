@@ -1,0 +1,36 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}My Posts - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="community-container">
+  <div class="community-card">
+    <div class="breadcrumb">
+      <a href="{% url 'communities:index' %}">Communities</a>
+      <span class="sep">/</span>
+      <span>My Posts</span>
+    </div>
+
+    <h2 style="font-size:1.15rem;margin-bottom:1rem;">My Posts</h2>
+
+    <div class="community-list" style="border-top:1px solid #e2e8f0;border-radius:0.4rem;">
+      {% for post in posts %}
+        <a href="{% url 'communities:post_detail' post.nta.nta_code post.id %}" class="post-card">
+          <div class="post-card-top">
+            <h3>{{ post.title }}</h3>
+            <span style="font-size:0.72rem;color:#64748b;white-space:nowrap;">{{ post.created_at|date:"M d, Y" }}</span>
+          </div>
+          <p class="preview">{{ post.content|truncatechars:100 }}</p>
+          <p class="meta">
+            in <strong>{{ post.nta.nta_name }}</strong> · {{ post.get_category_display }} · {{ post.comments.count }} replies
+          </p>
+        </a>
+      {% empty %}
+        <div class="community-empty">
+          <p>You haven't posted anything yet.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

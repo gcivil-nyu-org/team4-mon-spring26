@@ -1,0 +1,29 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}Delete Post - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="community-container" style="max-width:32rem;">
+  <div class="community-card">
+    <div class="breadcrumb">
+      <a href="{% url 'communities:index' %}">Communities</a>
+      <span class="sep">/</span>
+      <a href="{% url 'communities:nta_forum' nta.nta_code %}">{{ nta.nta_name }}</a>
+      <span class="sep">/</span>
+      <span>Delete Post</span>
+    </div>
+
+    <h2 style="font-size:1.1rem;color:#dc2626;">Delete Post</h2>
+    <p>Are you sure you want to delete <strong>"{{ post.title }}"</strong>?</p>
+    <p style="font-size:0.85rem;color:#64748b;">This action cannot be undone.</p>
+
+    <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+      <form method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:#dc2626;color:#fff;">Yes, Delete</button>
+      </form>
+      <a href="{% url 'communities:post_detail' nta.nta_code post.id %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

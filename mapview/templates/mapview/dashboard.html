@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}TenantGuard NYC - Livability Map{% endblock %}
+
+{% block extra_css %}
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="{% static 'mapview/css/dashboard.css' %}" />
+{% endblock %}
+
+{% block content %}
+    <main class="layout">
+      <header class="toolbar">
+        <h1>NYC Livability Map</h1>
+        <form id="address-search-form" class="search-form" autocomplete="off">
+          <input
+            id="address-search-input"
+            type="text"
+            placeholder="Search address (e.g. 123 Prince St)"
+            aria-label="Address search"
+            required
+          />
+          <button type="submit">Search</button>
+        </form>
+      </header>
+
+      <section class="map-wrapper">
+        <div id="map" aria-label="NYC livability map"></div>
+        <aside id="info-panel" class="info-panel hidden" aria-live="polite"></aside>
+        
+        <div id="map-legend" class="map-legend"></div>
+      </section>
+
+      <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+    </main>
+{% endblock %}
+
+{% block extra_scripts %}
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <script>
+      window.TENANTGUARD_CONFIG = {
+        mapboxAccessToken: "{{ mapbox_access_token|escapejs }}",
+        thresholds: JSON.parse("{{ thresholds|escapejs }}")
+      };
+    </script>
+    <script src="{% static 'mapview/js/dashboard.js' %}"></script>
+{% endblock %}
