@@ -1,0 +1,11 @@
+django>=4.2,<7
+requests>=2.31
+shapely>=2.0
+python-dotenv>=1.0
+coverage>=7.0
+gunicorn>=21.0
+whitenoise>=6.5
+dj-database-url>=2.1
+psycopg2-binary>=2.9
+Pillow>=10.0
+python-dateutil>=2.8

@@ -1,0 +1,62 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}{{ nta.nta_name }} Forum - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="community-container">
+  <div class="community-card">
+    <div class="breadcrumb">
+      <a href="{% url 'communities:index' %}">Communities</a>
+      <span class="sep">/</span>
+      <span>{{ nta.nta_name }}</span>
+    </div>
+
+    <div class="forum-header">
+      <div>
+        <h2>{{ nta.nta_name }} Discussion Board</h2>
+        <p style="font-size:0.82rem;color:#64748b;margin:0;">
+          {{ nta.borough }} · Risk Score: {{ nta.risk_score }}/10
+        </p>
+      </div>
+      {% if can_post %}
+        <a href="{% url 'communities:create_post' nta.nta_code %}" class="btn btn-primary btn-sm">Start a Discussion</a>
+      {% else %}
+        <button class="btn btn-secondary btn-sm" disabled title="You must be a verified resident of {{ nta.nta_name }} to post.">Verified Residents Only</button>
+      {% endif %}
+    </div>
+
+    <div class="community-list" style="border-top:1px solid #e2e8f0;border-radius:0.4rem;">
+      {% for post in posts %}
+        {% if post.is_active %}
+        <a href="{% url 'communities:post_detail' nta.nta_code post.id %}" class="post-card">
+          <div class="post-card-top">
+            <h3>
+              {% if post.is_pinned %}<span class="pinned-badge">Pinned</span>{% endif %}
+              {{ post.title }}
+            </h3>
+            <span style="font-size:0.72rem;color:#64748b;white-space:nowrap;">{{ post.created_at|date:"M d, Y" }}</span>
+          </div>
+          <p class="preview">{{ post.content|truncatechars:100 }}</p>
+          <p class="meta">
+            By {{ post.author.username }}
+            · <span class="category-badge">{{ post.get_category_display }}</span>
+            · {{ post.comments.count }} replies
+            {% if post.linked_address %}· <span style="color:#2563eb;">&#128205;</span>{% endif %}
+            {% if post.image %}· <span style="color:#2563eb;">&#128247;</span>{% endif %}
+          </p>
+        </a>
+        {% endif %}
+      {% empty %}
+        <div class="community-empty">
+          <p>No discussions started yet for {{ nta.nta_name }}.</p>
+          {% if can_post %}<p>Be the first to start an organizing thread!</p>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .category-badge{display:inline-block;padding:0.05rem 0.35rem;background:#f1f5f9;border-radius:0.2rem;font-size:0.72rem;color:#475569;}
+</style>
+{% endblock %}

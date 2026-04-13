@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Request Verification - TenantGuard NYC{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card" style="max-width:32rem;">
+    <h1>🔒 Request Tenant Verification</h1>
+    <p class="auth-subtitle">
+      Verify your residency to post, confirm issues, and interact in your building's community.
+    </p>
+
+    {% if user.has_pending_verification %}
+    <div class="verification-notice notice-pending">
+      <strong>⏳ You already have a pending request.</strong>
+      <p>An admin will review it shortly. You'll be notified of the outcome on your profile page.</p>
+      <a href="{% url 'verification-status' %}" class="btn btn-secondary" style="margin-top:0.5rem;">View Status</a>
+    </div>
+    {% else %}
+
+    {% if form.non_field_errors %}
+    <div class="form-errors">
+      <ul>
+        {% for error in form.non_field_errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label for="id_address">Full Address *</label>
+        {{ form.address }}
+        {% if form.address.errors %}
+          <span class="field-error">{{ form.address.errors.0 }}</span>
+        {% endif %}
+      </div>
+
+      <div style="display:flex;gap:0.75rem;">
+        <div class="form-group" style="flex:2;">
+          <label for="id_borough">Borough *</label>
+          {{ form.borough }}
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label for="id_zip_code">ZIP Code</label>
+          {{ form.zip_code }}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="id_document_type">Proof of Residency *</label>
+        {{ form.document_type }}
+        <span class="field-hint">Select the type of document you can provide</span>
+      </div>
+
+      <div class="form-group">
+        <label for="id_document">Upload Document</label>
+        {{ form.document }}
+        {% if form.document.errors %}
+          <span class="field-error">{{ form.document.errors.0 }}</span>
+        {% endif %}
+        <span class="field-hint">Upload your proof-of-residency (PDF, JPG, or PNG — max 10 MB)</span>
+      </div>
+
+      <div class="form-group">
+        <label for="id_document_description">Document Details</label>
+        {{ form.document_description }}
+        <span class="field-hint">Help the admin verify — describe date, account holder, etc.</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Submit Verification Request</button>
+    </form>
+    {% endif %}
+
+    <p class="auth-footer" style="margin-top:1.5rem;">
+      <a href="{% url 'profile' %}">← Back to Profile</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

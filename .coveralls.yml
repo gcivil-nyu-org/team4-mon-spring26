@@ -1,0 +1,4 @@
+service_name: travis-ci
+# It's better NOT to commit the raw repo token if the repo is public.
+# Assuming Travis has it set as an environment variable or we keep it here if private.
+repo_token: $COVERALLS_REPO_TOKEN

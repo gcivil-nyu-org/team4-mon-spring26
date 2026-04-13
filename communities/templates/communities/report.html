@@ -1,0 +1,45 @@
+{% extends 'communities/base_communities.html' %}
+
+{% block title %}Report Content - TenantGuard{% endblock %}
+
+{% block content %}
+<div class="community-container" style="max-width:36rem;">
+  <div class="community-card">
+    <h5 class="community-section-header bg-danger">Report Content to Moderators</h5>
+    <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 0.4rem 0.4rem;padding:1.25rem;">
+      <div class="report-alert">
+        <strong>You are reporting the following:</strong><br>
+        {% if post %}
+          <em>Post Title:</em> {{ post.title }}<br>
+          <em>By:</em> {{ post.author.username }}
+        {% elif comment %}
+          <em>Comment snippet:</em> "{{ comment.content|truncatechars:100 }}"<br>
+          <em>By:</em> {{ comment.author.username }}
+        {% elif reported_user %}
+          <em>User Profile:</em> {{ reported_user.username }}
+        {% endif %}
+      </div>
+
+      <form method="POST">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group" style="margin-bottom:0.9rem;">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <span class="field-hint">{{ field.help_text }}</span>
+          {% endif %}
+          {% for error in field.errors %}
+            <span class="field-error">{{ error }}</span>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="history.back()">Cancel</button>
+          <button type="submit" class="btn btn-danger" style="padding:0.5rem 1rem;border-radius:0.4rem;font-size:0.85rem;">Submit Report</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

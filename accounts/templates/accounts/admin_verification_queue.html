@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Verification Queue - Admin - TenantGuard NYC{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-card">
+    <h1>🛡️ Verification Queue</h1>
+    <p class="auth-subtitle">Review and approve or reject tenant verification requests</p>
+
+    <div class="queue-filters">
+      <a href="?status=pending" class="queue-filter {% if status_filter == 'pending' %}active{% endif %}">
+        ⏳ Pending
+      </a>
+      <a href="?status=approved" class="queue-filter {% if status_filter == 'approved' %}active{% endif %}">
+        ✅ Approved
+      </a>
+      <a href="?status=rejected" class="queue-filter {% if status_filter == 'rejected' %}active{% endif %}">
+        ❌ Rejected
+      </a>
+      <a href="?status=all" class="queue-filter {% if status_filter == 'all' %}active{% endif %}">
+        All
+      </a>
+    </div>
+
+    {% if not verification_requests %}
+    <div class="empty-state">
+      <p>No {{ status_filter }} verification requests found.</p>
+    </div>
+    {% else %}
+
+    <div class="vr-list">
+      {% for vr in verification_requests %}
+      <a href="{% url 'admin-verification-review' vr.pk %}" class="vr-card vr-{{ vr.status }} vr-card-link">
+        <div class="vr-card-header">
+          <span class="vr-badge vr-badge-{{ vr.status }}">
+            {% if vr.is_pending %}⏳ Pending{% elif vr.is_approved %}✅ Approved{% else %}❌ Rejected{% endif %}
+          </span>
+          <span class="vr-date">{{ vr.created_at|date:"M d, Y H:i" }}</span>
+        </div>
+
+        <p class="vr-user"><strong>👤 {{ vr.user.get_full_name|default:vr.user.username }}</strong> ({{ vr.user.email }})</p>
+        <p class="vr-address">📍 {{ vr.address }}</p>
+        <p class="vr-detail">{{ vr.borough }}{% if vr.zip_code %} · {{ vr.zip_code }}{% endif %} · {{ vr.get_document_type_display }}</p>
+      </a>
+      {% endfor %}
+    </div>
+
+    {% endif %}
+
+    <p class="auth-footer" style="margin-top:1.5rem;">
+      <a href="{% url 'dashboard' %}">← Back to Map</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
