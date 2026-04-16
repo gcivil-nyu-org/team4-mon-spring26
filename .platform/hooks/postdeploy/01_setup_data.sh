@@ -19,6 +19,11 @@ python manage.py migrate --noinput >> $LOG_FILE 2>&1
 
 echo "$(date): Migrations complete" >> $LOG_FILE
 
+# Collect static files (fast, ensures UI works after deployment)
+python manage.py collectstatic --noinput >> $LOG_FILE 2>&1
+
+echo "$(date): Static files collected" >> $LOG_FILE
+
 # Only run community setup once (marker file approach to avoid DB queries)
 # This avoids overhead on frequent deployments
 if [ ! -f "$SETUP_MARKER" ]; then
