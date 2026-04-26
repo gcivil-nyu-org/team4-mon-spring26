@@ -281,7 +281,11 @@
       });
 
       container.innerHTML = `
-        <p class="data-count">${data.count} violation${data.count !== 1 ? "s" : ""} found</p>
+        <p class="data-count">${
+          data.returned_count !== data.count
+            ? `Showing ${data.returned_count} of ${data.count} violation${data.count !== 1 ? "s" : ""}`
+            : `${data.count} violation${data.count !== 1 ? "s" : ""} found`
+        }</p>
         <div class="data-list">${rows}</div>
       `;
     } catch (error) {
@@ -339,7 +343,11 @@
       });
 
       container.innerHTML = `
-        <p class="data-count">${data.count} complaint${data.count !== 1 ? "s" : ""} found</p>
+        <p class="data-count">${
+          data.returned_count !== data.count
+            ? `Showing ${data.returned_count} of ${data.count} complaint${data.count !== 1 ? "s" : ""}`
+            : `${data.count} complaint${data.count !== 1 ? "s" : ""} found`
+        }</p>
         <div class="data-list">${rows}</div>
       `;
     } catch (error) {
