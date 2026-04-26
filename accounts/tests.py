@@ -293,6 +293,25 @@ class ProfileViewTests(TestCase):
         self.assertEqual(self.user.phone_number, "5551234567")
         self.assertEqual(self.user.bio, "Hello world")
 
+    def test_profile_update_rejects_blank_required_fields(self):
+        self.client.login(username="profuser", password="StrongPass99!")
+        response = self.client.post(
+            reverse("profile"),
+            {
+                "first_name": "",
+                "last_name": "",
+                "email": "",
+                "phone_number": "5551234567",
+                "bio": "Hello world",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This field is required.", count=3)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Prof")
+        self.assertEqual(self.user.last_name, "User")
+        self.assertEqual(self.user.email, "prof@test.com")
+
     def test_profile_shows_role_badge(self):
         self.client.login(username="profuser", password="StrongPass99!")
         response = self.client.get(reverse("profile"))

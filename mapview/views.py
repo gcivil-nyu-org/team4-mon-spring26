@@ -198,9 +198,11 @@ def nta_violations_view(request):
     except (ValueError, TypeError):
         limit = 50
 
-    qs = HPDViolation.objects.filter(nta_code=nta_code).order_by("-inspection_date")[
-        :limit
-    ]
+    base_qs = HPDViolation.objects.filter(nta_code=nta_code).order_by(
+        "-inspection_date"
+    )
+    total_count = base_qs.count()
+    qs = base_qs[:limit]
 
     violations = [
         {
@@ -221,7 +223,12 @@ def nta_violations_view(request):
     ]
 
     return JsonResponse(
-        {"nta_code": nta_code, "count": len(violations), "violations": violations}
+        {
+            "nta_code": nta_code,
+            "count": total_count,
+            "returned_count": len(violations),
+            "violations": violations,
+        }
     )
 
 
@@ -237,9 +244,9 @@ def nta_complaints_view(request):
     except (ValueError, TypeError):
         limit = 50
 
-    qs = Complaint311.objects.filter(nta_code=nta_code).order_by("-created_date")[
-        :limit
-    ]
+    base_qs = Complaint311.objects.filter(nta_code=nta_code).order_by("-created_date")
+    total_count = base_qs.count()
+    qs = base_qs[:limit]
 
     complaints = [
         {
@@ -257,7 +264,12 @@ def nta_complaints_view(request):
     ]
 
     return JsonResponse(
-        {"nta_code": nta_code, "count": len(complaints), "complaints": complaints}
+        {
+            "nta_code": nta_code,
+            "count": total_count,
+            "returned_count": len(complaints),
+            "complaints": complaints,
+        }
     )
 
 

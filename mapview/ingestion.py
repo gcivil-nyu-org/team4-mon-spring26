@@ -41,6 +41,12 @@ HOUSING_COMPLAINT_TYPES = [
 ]
 
 
+def _extract_violation_class(record):
+    """Return a normalized HPD violation class from the API payload."""
+    raw_value = record.get("violationclass") or record.get("class") or ""
+    return str(raw_value).strip().upper()
+
+
 def is_job_running():
     """Check if any ingestion job is currently running."""
     from mapview.models import IngestionJob
@@ -218,7 +224,7 @@ def _ingest_hpd(job, limit):
                     "street_name": rec.get("streetname", "") or "",
                     "apartment": rec.get("apartment", "") or "",
                     "zip_code": rec.get("zip", "") or "",
-                    "violation_class": rec.get("violationclass", "") or "",
+                    "violation_class": _extract_violation_class(rec),
                     "inspection_date": _parse_date(rec.get("inspectiondate")),
                     "approved_date": _parse_date(rec.get("approveddate")),
                     "nov_description": rec.get("novdescription", "") or "",
