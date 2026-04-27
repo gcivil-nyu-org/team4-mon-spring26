@@ -174,6 +174,7 @@ class NTAViolationsEndpointTests(TestCase):
         response = self.client.get(reverse("nta-violations"), {"nta_code": "ZZ99"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 0)
+        self.assertEqual(response.json()["returned_count"], 0)
 
     def test_returns_violations_for_nta(self):
         HPDViolation.objects.create(
@@ -201,6 +202,7 @@ class NTAViolationsEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["count"], 2)
+        self.assertEqual(data["returned_count"], 2)
         self.assertEqual(data["nta_code"], "MN01")
 
     def test_respects_limit_parameter(self):
@@ -211,7 +213,9 @@ class NTAViolationsEndpointTests(TestCase):
         response = self.client.get(
             reverse("nta-violations"), {"nta_code": "MN02", "limit": 2}
         )
-        self.assertEqual(response.json()["count"], 2)
+        data = response.json()
+        self.assertEqual(data["count"], 5)
+        self.assertEqual(data["returned_count"], 2)
 
 
 # ============================================================ #
@@ -228,6 +232,7 @@ class NTAComplaintsEndpointTests(TestCase):
         response = self.client.get(reverse("nta-complaints"), {"nta_code": "ZZ99"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 0)
+        self.assertEqual(response.json()["returned_count"], 0)
 
     def test_returns_complaints_for_nta(self):
         Complaint311.objects.create(
@@ -245,7 +250,27 @@ class NTAComplaintsEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["count"], 1)
+        self.assertEqual(data["returned_count"], 1)
         self.assertEqual(data["complaints"][0]["complaint_type"], "HEAT/HOT WATER")
+
+    def test_complaints_count_returns_total_when_limited(self):
+        for i in range(4):
+            Complaint311.objects.create(
+                unique_key=f"C{i}",
+                complaint_type="HEAT/HOT WATER",
+                borough="BRONX",
+                nta_code="BX02",
+                incident_address=f"{i} Grand Concourse",
+                status="Open",
+                created_date=timezone.now(),
+            )
+
+        response = self.client.get(
+            reverse("nta-complaints"), {"nta_code": "BX02", "limit": 2}
+        )
+        data = response.json()
+        self.assertEqual(data["count"], 4)
+        self.assertEqual(data["returned_count"], 2)
 
 
 # ============================================================ #
@@ -518,6 +543,7 @@ class IngestHPDViolationsCommandTests(TestCase):
         v = HPDViolation.objects.first()
         self.assertEqual(v.violation_id, 100001)
         self.assertEqual(v.borough, "MANHATTAN")
+        self.assertEqual(v.violation_class, "C")
 
     @patch("mapview.management.commands.ingest_hpd_violations.requests.get")
     def test_ingest_with_clear(self, mock_get):
@@ -570,6 +596,26 @@ class IngestHPDViolationsCommandTests(TestCase):
         self.assertEqual(HPDViolation.objects.count(), 1)
         v = HPDViolation.objects.first()
         self.assertEqual(v.borough, "MANHATTAN")
+        self.assertEqual(v.violation_class, "C")
+
+    @patch("mapview.management.commands.ingest_hpd_violations.requests.get")
+    def test_ingest_uses_class_fallback_field(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = [
+            {
+                "violationid": "100002",
+                "boroname": "BROOKLYN",
+                "class": " i ",
+                "latitude": "40.68",
+                "longitude": "-73.95",
+            }
+        ]
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        call_command("ingest_hpd_violations", limit=10)
+        v = HPDViolation.objects.get(violation_id=100002)
+        self.assertEqual(v.violation_class, "I")
 
 
 # ============================================================ #
