@@ -83,8 +83,24 @@ class ProfileForm(forms.ModelForm):
             "bio": forms.Textarea(
                 attrs={"rows": 3, "placeholder": "Tell us about yourself..."}
             ),
-            "phone_number": forms.TextInput(attrs={"placeholder": "Phone number"}),
+            "phone_number": forms.TextInput(
+                attrs={
+                    "placeholder": "2015551234",
+                    "inputmode": "numeric",
+                    "pattern": "[0-9]*",
+                }
+            ),
         }
+
+    def clean_phone_number(self):
+        phone_number = (self.cleaned_data.get("phone_number") or "").strip()
+        if not phone_number:
+            return phone_number
+        if not phone_number.isdigit() or len(phone_number) != 10:
+            raise forms.ValidationError(
+                "Phone number must contain exactly 10 digits."
+            )
+        return phone_number
 
 
 class VerificationRequestForm(forms.ModelForm):

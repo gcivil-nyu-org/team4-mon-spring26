@@ -361,6 +361,44 @@ class ProfileViewTests(TestCase):
         self.assertEqual(self.user.last_name, "User")
         self.assertEqual(self.user.email, "prof@test.com")
 
+    def test_profile_update_rejects_non_numeric_phone_number(self):
+        self.user.phone_number = "5551234567"
+        self.user.save(update_fields=["phone_number"])
+        self.client.login(username="profuser", password="StrongPass99!")
+        response = self.client.post(
+            reverse("profile"),
+            {
+                "first_name": "Updated",
+                "last_name": "Name",
+                "email": "updated@example.com",
+                "phone_number": "abc123",
+                "bio": "Hello world",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Phone number must contain exactly 10 digits.")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone_number, "5551234567")
+
+    def test_profile_update_rejects_phone_number_with_wrong_length(self):
+        self.user.phone_number = "5551234567"
+        self.user.save(update_fields=["phone_number"])
+        self.client.login(username="profuser", password="StrongPass99!")
+        response = self.client.post(
+            reverse("profile"),
+            {
+                "first_name": "Updated",
+                "last_name": "Name",
+                "email": "updated@example.com",
+                "phone_number": "5551234",
+                "bio": "Hello world",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Phone number must contain exactly 10 digits.")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone_number, "5551234567")
+
     def test_profile_shows_role_badge(self):
         self.client.login(username="profuser", password="StrongPass99!")
         response = self.client.get(reverse("profile"))
