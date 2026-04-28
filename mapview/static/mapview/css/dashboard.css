@@ -129,11 +129,11 @@ body {
 /* ---- Info panel (right side) ---- */
 .info-panel {
   position: absolute;
-  top: 0.75rem;
+  top: 3.5rem;
   right: 0.75rem;
   width: 22rem;
   max-width: calc(100% - 1.5rem);
-  max-height: calc(100vh - 12rem);
+  max-height: calc(100vh - 14.75rem);
   overflow-y: auto;
   background: rgba(255, 255, 255, 0.97);
   border-radius: 0.5rem;
