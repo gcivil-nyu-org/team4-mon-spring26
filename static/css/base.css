@@ -737,11 +737,14 @@ input[type="file"]:focus {
   border-radius: 0.6rem;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
   padding: 2rem;
+  min-width: 0;
 }
 
 .community-card h2 {
   margin: 0 0 0.3rem;
   font-size: 1.3rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .community-card .lead {
@@ -818,6 +821,8 @@ input[type="file"]:focus {
   margin-bottom: 1rem;
   list-style: none;
   padding: 0;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .breadcrumb a {
@@ -831,6 +836,43 @@ input[type="file"]:focus {
 
 .breadcrumb .sep {
   color: #94a3b8;
+}
+
+.delete-post-card {
+  max-width: 32rem;
+}
+
+.delete-post-card p,
+.delete-post-card strong,
+.delete-post-card span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.delete-post-title {
+  font-size: 1.1rem;
+  color: #dc2626;
+}
+
+.delete-post-warning {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.delete-post-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
 }
 
 /* Forum header row */
