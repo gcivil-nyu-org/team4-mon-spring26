@@ -15,16 +15,20 @@ MAX_DOCUMENT_SIZE_MB = 10
 
 class RegistrationForm(UserCreationForm):
     email = forms.EmailField(
-        required=True, widget=forms.EmailInput(attrs={"placeholder": "Email"})
+        required=True,
+        error_messages={"required": "Email is required."},
+        widget=forms.EmailInput(attrs={"placeholder": "Email"}),
     )
     first_name = forms.CharField(
         max_length=30,
         required=True,
+        error_messages={"required": "First name is required."},
         widget=forms.TextInput(attrs={"placeholder": "First name"}),
     )
     last_name = forms.CharField(
         max_length=30,
         required=True,
+        error_messages={"required": "Last name is required."},
         widget=forms.TextInput(attrs={"placeholder": "Last name"}),
     )
 
@@ -42,23 +46,34 @@ class RegistrationForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["username"].widget.attrs["placeholder"] = "Username"
+        self.fields["username"].error_messages["required"] = "Username is required."
         self.fields["password1"].widget.attrs["placeholder"] = "Password"
+        self.fields["password1"].error_messages["required"] = (
+            "Password is required."
+        )
         self.fields["password2"].widget.attrs["placeholder"] = "Confirm password"
+        self.fields["password2"].error_messages["required"] = (
+            "Password confirmation is required."
+        )
 
 
 class ProfileForm(forms.ModelForm):
     first_name = forms.CharField(
         max_length=30,
         required=True,
+        error_messages={"required": "First name is required."},
         widget=forms.TextInput(attrs={"placeholder": "First name"}),
     )
     last_name = forms.CharField(
         max_length=30,
         required=True,
+        error_messages={"required": "Last name is required."},
         widget=forms.TextInput(attrs={"placeholder": "Last name"}),
     )
     email = forms.EmailField(
-        required=True, widget=forms.EmailInput(attrs={"placeholder": "Email"})
+        required=True,
+        error_messages={"required": "Email is required."},
+        widget=forms.EmailInput(attrs={"placeholder": "Email"}),
     )
 
     class Meta:

@@ -208,6 +208,26 @@ class RegistrationViewTests(TestCase):
         )
         self.assertFalse(User.objects.filter(username="weakpass").exists())
 
+    def test_register_shows_field_specific_required_messages(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "username": "",
+                "email": "",
+                "first_name": "",
+                "last_name": "",
+                "password1": "",
+                "password2": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Username is required.")
+        self.assertContains(response, "Email is required.")
+        self.assertContains(response, "First name is required.")
+        self.assertContains(response, "Last name is required.")
+        self.assertContains(response, "Password is required.")
+        self.assertContains(response, "Password confirmation is required.")
+
     def test_register_page_shows_password_requirements(self):
         response = self.client.get(reverse("register"))
         self.assertEqual(response.status_code, 200)
@@ -333,7 +353,9 @@ class ProfileViewTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "This field is required.", count=3)
+        self.assertContains(response, "First name is required.")
+        self.assertContains(response, "Last name is required.")
+        self.assertContains(response, "Email is required.")
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, "Prof")
         self.assertEqual(self.user.last_name, "User")
