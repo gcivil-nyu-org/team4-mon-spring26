@@ -189,6 +189,33 @@ class RegistrationViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(User.objects.filter(username="mismatch").exists())
 
+    def test_register_rejects_weak_password_without_complexity(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "username": "weakpass",
+                "email": "weak@example.com",
+                "first_name": "Weak",
+                "last_name": "Pass",
+                "password1": "pqrstuvw",
+                "password2": "pqrstuvw",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Password must include uppercase, lowercase, number, and symbol characters.",
+        )
+        self.assertFalse(User.objects.filter(username="weakpass").exists())
+
+    def test_register_page_shows_password_requirements(self):
+        response = self.client.get(reverse("register"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "uppercase, lowercase, number, and symbol characters",
+        )
+
     def test_authenticated_user_redirected_from_register(self):
         User.objects.create_user(username="existing", password="testpass123")
         self.client.login(username="existing", password="testpass123")
