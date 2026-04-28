@@ -14,12 +14,12 @@
     </div>
 
     <div class="post-detail-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-        <h2>
+      <div class="post-detail-header">
+        <h2 class="post-detail-title">
           {% if post.is_pinned %}<span class="pinned-badge">Pinned</span>{% endif %}
           {{ post.title }}
         </h2>
-        <div style="display:flex;gap:0.4rem;align-items:center;">
+        <div class="post-action-group">
           {% if request.user == post.author or request.user.is_admin_user %}
             <a href="{% url 'communities:edit_post' nta.nta_code post.id %}" class="btn btn-sm" style="padding:0.2rem 0.5rem;font-size:0.78rem;">Edit</a>
             <a href="{% url 'communities:delete_post' nta.nta_code post.id %}" class="btn btn-sm" style="padding:0.2rem 0.5rem;font-size:0.78rem;color:#dc2626;border-color:#dc2626;">Delete</a>

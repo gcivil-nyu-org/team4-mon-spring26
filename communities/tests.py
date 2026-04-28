@@ -634,6 +634,22 @@ class EditDeletePostTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Delete Post")
 
+    def test_post_detail_handles_long_unbroken_text_without_losing_actions(self):
+        self.post.title = "X" * 250
+        self.post.content = "Y" * 1000
+        self.post.save()
+
+        self.client.login(username="author1", password="password123")
+        response = self.client.get(
+            reverse("communities:post_detail", args=["MN01", self.post.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit")
+        self.assertContains(response, "Delete")
+        self.assertContains(response, "Report")
+        self.assertContains(response, self.post.title)
+
 
 # ============================================================ #
 #  Sprint 3 – My Posts View
