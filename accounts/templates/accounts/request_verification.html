@@ -1,20 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}Request Verification - TenantGuard NYC{% endblock %}
+{% block title %}{% if is_editing %}Edit Verification Request{% else %}Request Verification{% endif %} - TenantGuard NYC{% endblock %}
 
 {% block content %}
 <div class="auth-container">
   <div class="auth-card" style="max-width:32rem;">
-    <h1>🔒 Request Tenant Verification</h1>
+    <h1>{% if is_editing %}✏️ Edit Verification Request{% else %}🔒 Request Tenant Verification{% endif %}</h1>
     <p class="auth-subtitle">
+      {% if is_editing %}
+      Update your pending request before an admin reviews it.
+      {% else %}
       Verify your residency to post, confirm issues, and interact in your building's community.
+      {% endif %}
     </p>
 
-    {% if user.has_pending_verification %}
+    {% if user.has_pending_verification and not is_editing %}
     <div class="verification-notice notice-pending">
       <strong>⏳ You already have a pending request.</strong>
       <p>An admin will review it shortly. You'll be notified of the outcome on your profile page.</p>
-      <a href="{% url 'verification-status' %}" class="btn btn-secondary" style="margin-top:0.5rem;">View Status</a>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+        <a href="{% url 'verification-status' %}" class="btn btn-secondary">View Status</a>
+        {% if pending_request %}
+        <a href="{% url 'edit-verification' pending_request.pk %}" class="btn btn-primary">Edit Pending Request</a>
+        {% endif %}
+      </div>
     </div>
     {% else %}
 
@@ -71,7 +80,7 @@
         <span class="field-hint">Help the admin verify — describe date, account holder, etc.</span>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-block">Submit Verification Request</button>
+      <button type="submit" class="btn btn-primary btn-block">{% if is_editing %}Save Changes{% else %}Submit Verification Request{% endif %}</button>
     </form>
     {% endif %}
 

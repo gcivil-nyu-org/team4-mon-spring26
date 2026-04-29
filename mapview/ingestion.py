@@ -15,6 +15,8 @@ from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 
+from mapview.utils import build_risk_summary, calculate_risk_score
+
 logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
@@ -408,6 +410,7 @@ def _compute_risk_scores(recency_config=None, job=None):
     if recency_config:
         cutoff = recency_config.get_cutoff_date()
 
+    score_rows = []
     scored = 0
     for nta_code, info in nta_lookup.items():
         violations_qs = HPDViolation.objects.filter(nta_code=nta_code)
@@ -431,56 +434,66 @@ def _compute_risk_scores(recency_config=None, job=None):
         top_complaint_types = [t["complaint_type"] for t in top_types]
 
         weighted = (class_c * 3) + (class_b * 2) + class_a + total_complaints
-        if weighted == 0:
-            risk_score = 10.0
-        else:
-            risk_score = round(
-                max(0.0, min(10.0, 10.0 - math.log1p(weighted) * 1.2)), 1
-            )
+        score_rows.append(
+            {
+                "nta_code": nta_code,
+                "info": info,
+                "totals": {
+                    "total_violations": total_violations,
+                    "total_complaints": total_complaints,
+                    "class_a_violations": class_a,
+                    "class_b_violations": class_b,
+                    "class_c_violations": class_c,
+                },
+                "top_complaint_types": top_complaint_types,
+                "weighted": weighted,
+            }
+        )
 
-        if risk_score <= 3.0:
-            summary = (
-                f"High-risk area — {total_violations} HPD violations and "
-                f"{total_complaints} complaints on record. Immediate concerns present."
-            )
-        elif risk_score <= 6.0:
-            summary = (
-                f"Moderate-risk area — {total_violations} violations and "
-                f"{total_complaints} complaints. Some issues but generally manageable."
-            )
-        else:
-            summary = (
-                f"Lower-risk area — {total_violations} violations and "
-                f"{total_complaints} complaints. Relatively stable conditions."
-            )
+    positive_logs = [
+        math.log1p(row["weighted"]) for row in score_rows if row["weighted"] > 0
+    ]
+    min_log_weight = min(positive_logs) if positive_logs else None
+    max_log_weight = max(positive_logs) if positive_logs else None
+
+    for row in score_rows:
+        totals = row["totals"]
+        risk_score = calculate_risk_score(
+            row["weighted"], min_log_weight, max_log_weight
+        )
+        summary = build_risk_summary(
+            risk_score,
+            totals["total_violations"],
+            totals["total_complaints"],
+        )
 
         NTARiskScore.objects.update_or_create(
-            nta_code=nta_code,
+            nta_code=row["nta_code"],
             defaults={
-                "nta_name": info["nta_name"],
-                "borough": info["borough"],
-                "total_violations": total_violations,
-                "total_complaints": total_complaints,
-                "class_a_violations": class_a,
-                "class_b_violations": class_b,
-                "class_c_violations": class_c,
+                "nta_name": row["info"]["nta_name"],
+                "borough": row["info"]["borough"],
+                "total_violations": totals["total_violations"],
+                "total_complaints": totals["total_complaints"],
+                "class_a_violations": totals["class_a_violations"],
+                "class_b_violations": totals["class_b_violations"],
+                "class_c_violations": totals["class_c_violations"],
                 "risk_score": risk_score,
-                "top_complaint_types": top_complaint_types,
+                "top_complaint_types": row["top_complaint_types"],
                 "summary": summary,
             },
         )
 
         # Record score history
-        previous = old_scores.get(nta_code)
+        previous = old_scores.get(row["nta_code"])
         delta = round(risk_score - previous, 1) if previous is not None else 0.0
         RiskScoreHistory.objects.create(
-            nta_code=nta_code,
-            nta_name=info["nta_name"],
+            nta_code=row["nta_code"],
+            nta_name=row["info"]["nta_name"],
             risk_score=risk_score,
             previous_score=previous,
             score_delta=delta,
-            total_violations=total_violations,
-            total_complaints=total_complaints,
+            total_violations=totals["total_violations"],
+            total_complaints=totals["total_complaints"],
             ingestion_job=job,
         )
 

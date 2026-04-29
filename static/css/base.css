@@ -449,6 +449,10 @@ body {
   border-left-color: #dc2626;
 }
 
+.vr-card.vr-withdrawn {
+  border-left-color: #64748b;
+}
+
 .vr-card-link {
   transition: box-shadow 0.15s, transform 0.1s;
 }
@@ -486,6 +490,11 @@ body {
 .vr-badge-rejected {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.vr-badge-withdrawn {
+  background: #e2e8f0;
+  color: #334155;
 }
 
 .vr-date {

@@ -96,6 +96,19 @@ class VerificationRequestModelTests(TestCase):
         self.assertTrue(vr.is_pending)
         self.assertFalse(vr.is_approved)
         self.assertFalse(vr.is_rejected)
+        self.assertFalse(vr.is_withdrawn)
+
+    def test_withdrawn_request_flags(self):
+        vr = VerificationRequest.objects.create(
+            user=self.user,
+            address="321 West St",
+            document_type="lease",
+            status=VerificationRequest.STATUS_WITHDRAWN,
+        )
+        self.assertFalse(vr.is_pending)
+        self.assertFalse(vr.is_approved)
+        self.assertFalse(vr.is_rejected)
+        self.assertTrue(vr.is_withdrawn)
 
     def test_str(self):
         vr = VerificationRequest.objects.create(
@@ -522,6 +535,79 @@ class RequestVerificationViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(VerificationRequest.objects.filter(user=self.user).count(), 2)
 
+    def test_edit_pending_request(self):
+        self.client.login(username="tenant1", password="StrongPass99!")
+        vr = VerificationRequest.objects.create(
+            user=self.user,
+            address="Old address",
+            borough="MANHATTAN",
+            zip_code="10001",
+            document_type="lease",
+            document_description="Old details",
+            status=VerificationRequest.STATUS_PENDING,
+        )
+        response = self.client.post(
+            reverse("edit-verification", args=[vr.pk]),
+            {
+                "address": "Updated address",
+                "borough": "BROOKLYN",
+                "zip_code": "11201",
+                "document_type": "utility_bill",
+                "document_description": "Updated details",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        vr.refresh_from_db()
+        self.assertEqual(vr.address, "Updated address")
+        self.assertEqual(vr.borough, "BROOKLYN")
+        self.assertEqual(vr.document_type, "utility_bill")
+        self.assertEqual(vr.status, VerificationRequest.STATUS_PENDING)
+
+    def test_cannot_edit_non_pending_request(self):
+        self.client.login(username="tenant1", password="StrongPass99!")
+        vr = VerificationRequest.objects.create(
+            user=self.user,
+            address="Old address",
+            document_type="lease",
+            status=VerificationRequest.STATUS_REJECTED,
+        )
+        response = self.client.get(reverse("edit-verification", args=[vr.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_can_withdraw_pending_request(self):
+        self.client.login(username="tenant1", password="StrongPass99!")
+        vr = VerificationRequest.objects.create(
+            user=self.user,
+            address="Old address",
+            document_type="lease",
+            status=VerificationRequest.STATUS_PENDING,
+        )
+        response = self.client.post(reverse("withdraw-verification", args=[vr.pk]))
+        self.assertEqual(response.status_code, 302)
+        vr.refresh_from_db()
+        self.assertEqual(vr.status, VerificationRequest.STATUS_WITHDRAWN)
+
+    def test_can_resubmit_after_withdrawing(self):
+        self.client.login(username="tenant1", password="StrongPass99!")
+        VerificationRequest.objects.create(
+            user=self.user,
+            address="Old address",
+            document_type="lease",
+            status=VerificationRequest.STATUS_WITHDRAWN,
+        )
+        response = self.client.post(
+            reverse("request-verification"),
+            {
+                "address": "New address",
+                "borough": "QUEENS",
+                "zip_code": "11375",
+                "document_type": "bank_statement",
+                "document_description": "Chase statement",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(VerificationRequest.objects.filter(user=self.user).count(), 2)
+
     @override_settings(MEDIA_ROOT="/tmp/tenantguard_test_media/")
     def test_submit_with_document_upload(self):
         self.client.login(username="tenant1", password="StrongPass99!")
@@ -607,6 +693,18 @@ class VerificationStatusViewTests(TestCase):
         )
         response = self.client.get(reverse("verification-status"))
         self.assertContains(response, "55 Water St")
+
+    def test_shows_edit_and_withdraw_for_pending_requests(self):
+        self.client.login(username="statususer", password="StrongPass99!")
+        vr = VerificationRequest.objects.create(
+            user=self.user,
+            address="55 Water St",
+            document_type="lease",
+            status=VerificationRequest.STATUS_PENDING,
+        )
+        response = self.client.get(reverse("verification-status"))
+        self.assertContains(response, reverse("edit-verification", args=[vr.pk]))
+        self.assertContains(response, reverse("withdraw-verification", args=[vr.pk]))
 
 
 # ============================================================ #
