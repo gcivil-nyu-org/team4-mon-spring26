@@ -49,6 +49,15 @@ def is_verified_for_nta(user, nta_code):
     return False
 
 
+def can_comment_in_nta(user, nta_code):
+    """Only verified tenants of the matching NTA can comment."""
+    return (
+        user.is_authenticated
+        and getattr(user, "is_verified_tenant", False)
+        and user.verified_nta_code == nta_code
+    )
+
+
 def forum_index(request):
     """List of all NTA forums with My Community section."""
     search = request.GET.get("q", "").strip()
@@ -134,10 +143,19 @@ def post_detail(request, nta_code, post_id):
             post.current_user_vote = existing_vote.value
 
     can_post = is_verified_for_nta(request.user, nta_code)
+    can_comment = can_comment_in_nta(request.user, nta_code)
 
     form = CommentForm()
 
-    if request.method == "POST" and can_post:
+    if request.method == "POST":
+        if not can_comment:
+            messages.error(
+                request,
+                f"You must be a verified resident of {nta.nta_name} to post a reply.",
+            )
+            return redirect(
+                "communities:post_detail", nta_code=nta.nta_code, post_id=post.id
+            )
         form = CommentForm(request.POST)
         if form.is_valid():
             comment = form.save(commit=False)
@@ -155,6 +173,7 @@ def post_detail(request, nta_code, post_id):
         "comments": comments,
         "form": form,
         "can_post": can_post,
+        "can_comment": can_comment,
     }
     return render(request, "communities/post_detail.html", context)
 

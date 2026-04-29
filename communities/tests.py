@@ -276,6 +276,51 @@ class CommunitiesTests(TestCase):
             Comment.objects.filter(content="I am having the same issue.").exists()
         )
 
+    def test_public_user_cannot_comment(self):
+        self.client.login(username="public", password="password123")
+        response = self.client.post(
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+            {"content": "Trying to comment anyway."},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(
+            Comment.objects.filter(content="Trying to comment anyway.").exists()
+        )
+
+    def test_verified_wrong_nta_cannot_comment(self):
+        self.client.login(username="verified_bk01", password="password123")
+        response = self.client.post(
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+            {"content": "I live in a different neighborhood."},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(
+            Comment.objects.filter(
+                content="I live in a different neighborhood."
+            ).exists()
+        )
+
+    def test_admin_cannot_comment_without_matching_verification(self):
+        User.objects.create_superuser(
+            username="admin_comment", password="password123", email="admin@test.com"
+        )
+        self.client.login(username="admin_comment", password="password123")
+        response = self.client.post(
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+            {"content": "Admin reply"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(Comment.objects.filter(content="Admin reply").exists())
+
     def test_create_report(self):
         """Logged in users can report a post."""
         self.client.login(username="public", password="password123")

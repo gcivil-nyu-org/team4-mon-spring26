@@ -113,7 +113,7 @@
 
     <div class="reply-section">
       <h3>Leave a Reply</h3>
-      {% if can_post %}
+      {% if can_comment %}
         <form method="POST">
           {% csrf_token %}
           <div class="form-group" style="margin-bottom:0.75rem;">
