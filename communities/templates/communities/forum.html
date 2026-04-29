@@ -40,6 +40,7 @@
           <p class="meta">
             By {{ post.author.username }}
             · <span class="category-badge">{{ post.get_category_display }}</span>
+            · <span class="vote-score-inline">Score: {{ post.vote_score_value }}</span>
             · {{ post.comments.count }} replies
             {% if post.linked_address %}· <span style="color:#2563eb;">&#128205;</span>{% endif %}
             {% if post.image %}· <span style="color:#2563eb;">&#128247;</span>{% endif %}

@@ -47,6 +47,11 @@ urlpatterns = [
         name="post_detail",
     ),
     path(
+        "<str:nta_code>/post/<int:post_id>/vote/",
+        views.vote_post,
+        name="vote_post",
+    ),
+    path(
         "<str:nta_code>/post/<int:post_id>/edit/",
         views.edit_post,
         name="edit_post",

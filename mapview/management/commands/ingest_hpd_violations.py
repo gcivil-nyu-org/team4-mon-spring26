@@ -26,6 +26,12 @@ def _parse_date(value):
         return None
 
 
+def _extract_violation_class(record):
+    """Return a normalized HPD violation class from the API payload."""
+    raw_value = record.get("violationclass") or record.get("class") or ""
+    return str(raw_value).strip().upper()
+
+
 class Command(BaseCommand):
     help = "Ingest HPD violations from the NYC Open Data SODA API"
 
@@ -94,7 +100,7 @@ class Command(BaseCommand):
                         "street_name": rec.get("streetname", "") or "",
                         "apartment": rec.get("apartment", "") or "",
                         "zip_code": rec.get("zip", "") or "",
-                        "violation_class": rec.get("violationclass", "") or "",
+                        "violation_class": _extract_violation_class(rec),
                         "inspection_date": _parse_date(rec.get("inspectiondate")),
                         "approved_date": _parse_date(rec.get("approveddate")),
                         "nov_description": rec.get("novdescription", "") or "",

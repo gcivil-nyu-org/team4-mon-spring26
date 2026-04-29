@@ -3,13 +3,38 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum, Value, IntegerField
+from django.db.models.functions import Coalesce
 
 from mapview.models import NTARiskScore
-from .models import Community, Post, Comment, Report, DirectMessage
+from .models import Community, Post, Comment, Report, DirectMessage, PostVote
 from .forms import PostForm, CommentForm, ReportForm, DirectMessageForm
 
 User = get_user_model()
+
+
+def _posts_with_vote_data(queryset, user):
+    posts = queryset.annotate(
+        vote_score_value=Coalesce(
+            Sum("votes__value"),
+            Value(0),
+            output_field=IntegerField(),
+        )
+    )
+    if user.is_authenticated:
+        user_votes = {
+            vote.post_id: vote.value
+            for vote in PostVote.objects.filter(
+                user=user, post_id__in=posts.values_list("id", flat=True)
+            )
+        }
+    else:
+        user_votes = {}
+
+    for post in posts:
+        post.vote_score_value = getattr(post, "vote_score_value", 0)
+        post.current_user_vote = user_votes.get(post.id, 0)
+    return posts
 
 
 def is_verified_for_nta(user, nta_code):
@@ -22,6 +47,15 @@ def is_verified_for_nta(user, nta_code):
         # Check their verified NTA
         return user.verified_nta_code == nta_code
     return False
+
+
+def can_comment_in_nta(user, nta_code):
+    """Only verified tenants of the matching NTA can comment."""
+    return (
+        user.is_authenticated
+        and getattr(user, "is_verified_tenant", False)
+        and user.verified_nta_code == nta_code
+    )
 
 
 def forum_index(request):
@@ -80,7 +114,10 @@ def forum_index(request):
 
 def nta_forum(request, nta_code):
     nta = get_object_or_404(NTARiskScore, nta_code=nta_code)
-    posts = nta.posts.all().select_related("author")
+    posts = _posts_with_vote_data(
+        nta.posts.filter(is_active=True).select_related("author"),
+        request.user,
+    )
     can_post = is_verified_for_nta(request.user, nta_code)
 
     context = {
@@ -95,12 +132,30 @@ def post_detail(request, nta_code, post_id):
     nta = get_object_or_404(NTARiskScore, nta_code=nta_code)
     post = get_object_or_404(Post, id=post_id, nta=nta)
     comments = post.comments.all().select_related("author")
+    post_vote = PostVote.objects.filter(post=post).aggregate(
+        score=Coalesce(Sum("value"), Value(0), output_field=IntegerField())
+    )
+    post.vote_score_value = post_vote["score"]
+    post.current_user_vote = 0
+    if request.user.is_authenticated:
+        existing_vote = PostVote.objects.filter(post=post, user=request.user).first()
+        if existing_vote:
+            post.current_user_vote = existing_vote.value
 
     can_post = is_verified_for_nta(request.user, nta_code)
+    can_comment = can_comment_in_nta(request.user, nta_code)
 
     form = CommentForm()
 
-    if request.method == "POST" and can_post:
+    if request.method == "POST":
+        if not can_comment:
+            messages.error(
+                request,
+                f"You must be a verified resident of {nta.nta_name} to post a reply.",
+            )
+            return redirect(
+                "communities:post_detail", nta_code=nta.nta_code, post_id=post.id
+            )
         form = CommentForm(request.POST)
         if form.is_valid():
             comment = form.save(commit=False)
@@ -118,8 +173,50 @@ def post_detail(request, nta_code, post_id):
         "comments": comments,
         "form": form,
         "can_post": can_post,
+        "can_comment": can_comment,
     }
     return render(request, "communities/post_detail.html", context)
+
+
+@login_required
+def vote_post(request, nta_code, post_id):
+    if request.method != "POST":
+        raise PermissionDenied("POST request required.")
+
+    nta = get_object_or_404(NTARiskScore, nta_code=nta_code)
+    post = get_object_or_404(Post, id=post_id, nta=nta, is_active=True)
+
+    if not is_verified_for_nta(request.user, nta_code):
+        messages.error(
+            request, f"You must be a verified resident of {nta.nta_name} to vote."
+        )
+        return redirect("communities:post_detail", nta_code=nta_code, post_id=post_id)
+
+    try:
+        value = int(request.POST.get("value", "0"))
+    except ValueError:
+        raise PermissionDenied("Invalid vote value.")
+
+    if value not in (PostVote.VALUE_UPVOTE, PostVote.VALUE_DOWNVOTE):
+        raise PermissionDenied("Invalid vote value.")
+
+    vote, created = PostVote.objects.get_or_create(
+        post=post,
+        user=request.user,
+        defaults={"value": value},
+    )
+    if not created:
+        if vote.value == value:
+            vote.delete()
+            messages.success(request, "Vote removed.")
+        else:
+            vote.value = value
+            vote.save(update_fields=["value", "updated_at"])
+            messages.success(request, "Vote updated.")
+    else:
+        messages.success(request, "Vote recorded.")
+
+    return redirect("communities:post_detail", nta_code=nta_code, post_id=post_id)
 
 
 @login_required
@@ -174,6 +271,20 @@ def report_content(request, nta_code):
     else:
         raise PermissionDenied(
             "Must provide post_id, comment_id, or user_id to report."
+        )
+
+    if post and post.author == request.user:
+        messages.error(request, "You cannot report your own post.")
+        return redirect(
+            "communities:post_detail", nta_code=nta.nta_code, post_id=post.id
+        )
+
+    if comment and comment.author == request.user:
+        messages.error(request, "You cannot report your own comment.")
+        return redirect(
+            "communities:post_detail",
+            nta_code=nta.nta_code,
+            post_id=comment.post.id,
         )
 
     if request.method == "POST":

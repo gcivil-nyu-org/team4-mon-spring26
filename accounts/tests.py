@@ -189,6 +189,53 @@ class RegistrationViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(User.objects.filter(username="mismatch").exists())
 
+    def test_register_rejects_weak_password_without_complexity(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "username": "weakpass",
+                "email": "weak@example.com",
+                "first_name": "Weak",
+                "last_name": "Pass",
+                "password1": "pqrstuvw",
+                "password2": "pqrstuvw",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Password must include uppercase, lowercase, number, and symbol characters.",
+        )
+        self.assertFalse(User.objects.filter(username="weakpass").exists())
+
+    def test_register_shows_field_specific_required_messages(self):
+        response = self.client.post(
+            reverse("register"),
+            {
+                "username": "",
+                "email": "",
+                "first_name": "",
+                "last_name": "",
+                "password1": "",
+                "password2": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Username is required.")
+        self.assertContains(response, "Email is required.")
+        self.assertContains(response, "First name is required.")
+        self.assertContains(response, "Last name is required.")
+        self.assertContains(response, "Password is required.")
+        self.assertContains(response, "Password confirmation is required.")
+
+    def test_register_page_shows_password_requirements(self):
+        response = self.client.get(reverse("register"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "uppercase, lowercase, number, and symbol characters",
+        )
+
     def test_authenticated_user_redirected_from_register(self):
         User.objects.create_user(username="existing", password="testpass123")
         self.client.login(username="existing", password="testpass123")
@@ -292,6 +339,65 @@ class ProfileViewTests(TestCase):
         self.assertEqual(self.user.first_name, "Updated")
         self.assertEqual(self.user.phone_number, "5551234567")
         self.assertEqual(self.user.bio, "Hello world")
+
+    def test_profile_update_rejects_blank_required_fields(self):
+        self.client.login(username="profuser", password="StrongPass99!")
+        response = self.client.post(
+            reverse("profile"),
+            {
+                "first_name": "",
+                "last_name": "",
+                "email": "",
+                "phone_number": "5551234567",
+                "bio": "Hello world",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "First name is required.")
+        self.assertContains(response, "Last name is required.")
+        self.assertContains(response, "Email is required.")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, "Prof")
+        self.assertEqual(self.user.last_name, "User")
+        self.assertEqual(self.user.email, "prof@test.com")
+
+    def test_profile_update_rejects_non_numeric_phone_number(self):
+        self.user.phone_number = "5551234567"
+        self.user.save(update_fields=["phone_number"])
+        self.client.login(username="profuser", password="StrongPass99!")
+        response = self.client.post(
+            reverse("profile"),
+            {
+                "first_name": "Updated",
+                "last_name": "Name",
+                "email": "updated@example.com",
+                "phone_number": "abc123",
+                "bio": "Hello world",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Phone number must contain exactly 10 digits.")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone_number, "5551234567")
+
+    def test_profile_update_rejects_phone_number_with_wrong_length(self):
+        self.user.phone_number = "5551234567"
+        self.user.save(update_fields=["phone_number"])
+        self.client.login(username="profuser", password="StrongPass99!")
+        response = self.client.post(
+            reverse("profile"),
+            {
+                "first_name": "Updated",
+                "last_name": "Name",
+                "email": "updated@example.com",
+                "phone_number": "5551234",
+                "bio": "Hello world",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Phone number must contain exactly 10 digits.")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.phone_number, "5551234567")
 
     def test_profile_shows_role_badge(self):
         self.client.login(username="profuser", password="StrongPass99!")

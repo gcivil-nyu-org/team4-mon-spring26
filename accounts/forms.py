@@ -15,16 +15,20 @@ MAX_DOCUMENT_SIZE_MB = 10
 
 class RegistrationForm(UserCreationForm):
     email = forms.EmailField(
-        required=True, widget=forms.EmailInput(attrs={"placeholder": "Email"})
+        required=True,
+        error_messages={"required": "Email is required."},
+        widget=forms.EmailInput(attrs={"placeholder": "Email"}),
     )
     first_name = forms.CharField(
         max_length=30,
         required=True,
+        error_messages={"required": "First name is required."},
         widget=forms.TextInput(attrs={"placeholder": "First name"}),
     )
     last_name = forms.CharField(
         max_length=30,
         required=True,
+        error_messages={"required": "Last name is required."},
         widget=forms.TextInput(attrs={"placeholder": "Last name"}),
     )
 
@@ -42,11 +46,34 @@ class RegistrationForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["username"].widget.attrs["placeholder"] = "Username"
+        self.fields["username"].error_messages["required"] = "Username is required."
         self.fields["password1"].widget.attrs["placeholder"] = "Password"
+        self.fields["password1"].error_messages["required"] = "Password is required."
         self.fields["password2"].widget.attrs["placeholder"] = "Confirm password"
+        self.fields["password2"].error_messages[
+            "required"
+        ] = "Password confirmation is required."
 
 
 class ProfileForm(forms.ModelForm):
+    first_name = forms.CharField(
+        max_length=30,
+        required=True,
+        error_messages={"required": "First name is required."},
+        widget=forms.TextInput(attrs={"placeholder": "First name"}),
+    )
+    last_name = forms.CharField(
+        max_length=30,
+        required=True,
+        error_messages={"required": "Last name is required."},
+        widget=forms.TextInput(attrs={"placeholder": "Last name"}),
+    )
+    email = forms.EmailField(
+        required=True,
+        error_messages={"required": "Email is required."},
+        widget=forms.EmailInput(attrs={"placeholder": "Email"}),
+    )
+
     class Meta:
         model = User
         fields = ["first_name", "last_name", "email", "phone_number", "bio"]
@@ -54,8 +81,22 @@ class ProfileForm(forms.ModelForm):
             "bio": forms.Textarea(
                 attrs={"rows": 3, "placeholder": "Tell us about yourself..."}
             ),
-            "phone_number": forms.TextInput(attrs={"placeholder": "Phone number"}),
+            "phone_number": forms.TextInput(
+                attrs={
+                    "placeholder": "2015551234",
+                    "inputmode": "numeric",
+                    "pattern": "[0-9]*",
+                }
+            ),
         }
+
+    def clean_phone_number(self):
+        phone_number = (self.cleaned_data.get("phone_number") or "").strip()
+        if not phone_number:
+            return phone_number
+        if not phone_number.isdigit() or len(phone_number) != 10:
+            raise forms.ValidationError("Phone number must contain exactly 10 digits.")
+        return phone_number
 
 
 class VerificationRequestForm(forms.ModelForm):

@@ -90,17 +90,88 @@
     const legendEl = document.getElementById("map-legend");
     if (!legendEl) return;
     const thresholds = window.TENANTGUARD_CONFIG?.thresholds || [];
-    
-    let html = `<h4>Livability Risk</h4>`;
+
+    let legendItems = "";
     thresholds.forEach(t => {
-      html += `
+      legendItems += `
         <div class="legend-item">
           <div class="legend-color" style="background-color: ${t.color}"></div>
           <span>${t.name}</span>
         </div>
       `;
     });
-    legendEl.innerHTML = html;
+
+    legendEl.innerHTML = `
+      <button
+        type="button"
+        class="legend-toggle"
+        id="legend-toggle"
+        aria-expanded="false"
+        aria-controls="legend-tooltip"
+      >
+        <span class="legend-toggle-title">Livability Index</span>
+        <span class="legend-toggle-icon" aria-hidden="true">?</span>
+      </button>
+      <div class="legend-tooltip hidden" id="legend-tooltip" role="tooltip">
+        <h4>Livability Risk</h4>
+        <p class="legend-copy">
+          Scores run from 0 to 10, where 10 is safest. We weight severe housing issues
+          more heavily before converting the total into the neighborhood score.
+        </p>
+        <div class="legend-formula">
+          <strong>Weighted issues:</strong> Class C x3, Class B x2, Class A x1, 311 complaints x1
+        </div>
+        <div class="legend-scale">
+          ${legendItems}
+        </div>
+        <p class="legend-copy legend-copy-subtle">
+          More complaints and violations lower the score. Fewer issues keep it closer to 10.
+        </p>
+      </div>
+    `;
+
+    const toggleButton = document.getElementById("legend-toggle");
+    const tooltip = document.getElementById("legend-tooltip");
+    if (!toggleButton || !tooltip) return;
+
+    const closeLegend = () => {
+      legendEl.classList.remove("expanded");
+      tooltip.classList.add("hidden");
+      toggleButton.setAttribute("aria-expanded", "false");
+      const icon = toggleButton.querySelector(".legend-toggle-icon");
+      if (icon) icon.textContent = "?";
+    };
+
+    const openLegend = () => {
+      legendEl.classList.add("expanded");
+      tooltip.classList.remove("hidden");
+      toggleButton.setAttribute("aria-expanded", "true");
+      const icon = toggleButton.querySelector(".legend-toggle-icon");
+      if (icon) icon.textContent = "X";
+    };
+
+    toggleButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (legendEl.classList.contains("expanded")) {
+        closeLegend();
+      } else {
+        openLegend();
+      }
+    });
+
+    legendEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener("click", () => {
+      closeLegend();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeLegend();
+      }
+    });
   }
   
   async function fetchWithRetry(url, options = {}, retries = 3) {
@@ -281,7 +352,11 @@
       });
 
       container.innerHTML = `
-        <p class="data-count">${data.count} violation${data.count !== 1 ? "s" : ""} found</p>
+        <p class="data-count">${
+          data.returned_count !== data.count
+            ? `Showing ${data.returned_count} of ${data.count} violation${data.count !== 1 ? "s" : ""}`
+            : `${data.count} violation${data.count !== 1 ? "s" : ""} found`
+        }</p>
         <div class="data-list">${rows}</div>
       `;
     } catch (error) {
@@ -339,7 +414,11 @@
       });
 
       container.innerHTML = `
-        <p class="data-count">${data.count} complaint${data.count !== 1 ? "s" : ""} found</p>
+        <p class="data-count">${
+          data.returned_count !== data.count
+            ? `Showing ${data.returned_count} of ${data.count} complaint${data.count !== 1 ? "s" : ""}`
+            : `${data.count} complaint${data.count !== 1 ? "s" : ""} found`
+        }</p>
         <div class="data-list">${rows}</div>
       `;
     } catch (error) {

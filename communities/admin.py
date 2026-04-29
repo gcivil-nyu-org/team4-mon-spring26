@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Comment, Community, CommunityMembership, DirectMessage, Post, Report
+from .models import (
+    Comment,
+    Community,
+    CommunityMembership,
+    DirectMessage,
+    Post,
+    PostVote,
+    Report,
+)
 
 
 @admin.register(Community)
@@ -37,6 +45,14 @@ class CommentAdmin(admin.ModelAdmin):
     list_display = ["id", "post", "author", "created_at"]
     search_fields = ["content", "author__username"]
     raw_id_fields = ["author", "post"]
+
+
+@admin.register(PostVote)
+class PostVoteAdmin(admin.ModelAdmin):
+    list_display = ["post", "user", "value", "created_at", "updated_at"]
+    list_filter = ["value", "created_at"]
+    search_fields = ["post__title", "user__username"]
+    raw_id_fields = ["post", "user"]
 
 
 @admin.register(DirectMessage)
