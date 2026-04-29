@@ -4,7 +4,15 @@ from django.urls import reverse
 
 from accounts.models import User, VerificationRequest
 from mapview.models import NTARiskScore
-from .models import Comment, Community, CommunityMembership, DirectMessage, Post, Report
+from .models import (
+    Comment,
+    Community,
+    CommunityMembership,
+    DirectMessage,
+    Post,
+    PostVote,
+    Report,
+)
 
 # ============================================================ #
 #  Model __str__ tests
@@ -43,6 +51,34 @@ class CommentModelTests(TestCase):
         )
         self.assertIn("commenter", str(comment))
         self.assertIn("Post A", str(comment))
+
+
+class PostVoteModelTests(TestCase):
+    def setUp(self):
+        self.nta = NTARiskScore.objects.create(
+            nta_code="MN01", nta_name="Inwood", borough="Manhattan"
+        )
+        self.user = User.objects.create_user(username="voter", password="password123")
+        self.post = Post.objects.create(
+            nta=self.nta, author=self.user, title="Post A", content="body"
+        )
+
+    def test_str(self):
+        vote = PostVote.objects.create(
+            post=self.post, user=self.user, value=PostVote.VALUE_UPVOTE
+        )
+        self.assertIn("voter", str(vote))
+        self.assertIn("Post A", str(vote))
+
+    def test_post_vote_score(self):
+        other = User.objects.create_user(username="othervoter", password="password123")
+        PostVote.objects.create(
+            post=self.post, user=self.user, value=PostVote.VALUE_UPVOTE
+        )
+        PostVote.objects.create(
+            post=self.post, user=other, value=PostVote.VALUE_DOWNVOTE
+        )
+        self.assertEqual(self.post.vote_score, 0)
 
 
 class DirectMessageModelTests(TestCase):
@@ -418,6 +454,83 @@ class CommunitiesTests(TestCase):
         msg = DirectMessage.objects.get(content="Unread msg")
         self.assertTrue(msg.is_read)
 
+    def test_verified_user_can_upvote_post(self):
+        self.client.login(username="verified_mn01", password="password123")
+        response = self.client.post(
+            reverse("communities:vote_post", args=[self.nta.nta_code, self.post.id]),
+            {"value": "1"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        vote = PostVote.objects.get(post=self.post, user=self.verified_user)
+        self.assertEqual(vote.value, PostVote.VALUE_UPVOTE)
+
+    def test_repeat_vote_toggles_off(self):
+        PostVote.objects.create(
+            post=self.post, user=self.verified_user, value=PostVote.VALUE_UPVOTE
+        )
+        self.client.login(username="verified_mn01", password="password123")
+        response = self.client.post(
+            reverse("communities:vote_post", args=[self.nta.nta_code, self.post.id]),
+            {"value": "1"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(
+            PostVote.objects.filter(post=self.post, user=self.verified_user).exists()
+        )
+
+    def test_vote_can_switch_direction(self):
+        PostVote.objects.create(
+            post=self.post, user=self.verified_user, value=PostVote.VALUE_UPVOTE
+        )
+        self.client.login(username="verified_mn01", password="password123")
+        self.client.post(
+            reverse("communities:vote_post", args=[self.nta.nta_code, self.post.id]),
+            {"value": "-1"},
+        )
+        vote = PostVote.objects.get(post=self.post, user=self.verified_user)
+        self.assertEqual(vote.value, PostVote.VALUE_DOWNVOTE)
+
+    def test_wrong_nta_user_cannot_vote(self):
+        self.client.login(username="verified_bk01", password="password123")
+        response = self.client.post(
+            reverse("communities:vote_post", args=[self.nta.nta_code, self.post.id]),
+            {"value": "1"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(PostVote.objects.filter(post=self.post).exists())
+
+    def test_public_user_cannot_vote(self):
+        self.client.login(username="public", password="password123")
+        response = self.client.post(
+            reverse("communities:vote_post", args=[self.nta.nta_code, self.post.id]),
+            {"value": "1"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(PostVote.objects.filter(post=self.post).exists())
+
+    def test_post_detail_shows_vote_score(self):
+        PostVote.objects.create(
+            post=self.post, user=self.verified_user, value=PostVote.VALUE_UPVOTE
+        )
+        response = self.client.get(
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Community Score")
+        self.assertContains(response, ">1<", html=False)
+
 
 # ============================================================ #
 #  Sprint 3 – Community & CommunityMembership Models
@@ -720,6 +833,9 @@ class CommunityAPITests(TestCase):
         self.post = Post.objects.create(
             nta=self.nta, author=self.user, title="API Test Post", content="Hello"
         )
+        PostVote.objects.create(
+            post=self.post, user=self.user, value=PostVote.VALUE_UPVOTE
+        )
 
     def test_community_list_api(self):
         response = self.client.get(reverse("communities:api_community_list"))
@@ -749,6 +865,7 @@ class CommunityAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertGreaterEqual(len(data["posts"]), 1)
+        self.assertEqual(data["posts"][0]["vote_score"], 1)
 
     def test_my_community_api_unauthenticated(self):
         response = self.client.get(reverse("communities:api_my_community"))
@@ -762,6 +879,7 @@ class CommunityAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data.get("has_community"))
+        self.assertEqual(data["recent_posts"][0]["vote_score"], 1)
 
     def test_my_posts_api_unauthenticated(self):
         response = self.client.get(reverse("communities:api_my_posts"))
@@ -773,6 +891,7 @@ class CommunityAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertGreaterEqual(len(data["posts"]), 1)
+        self.assertEqual(data["posts"][0]["vote_score"], 1)
 
 
 # ============================================================ #

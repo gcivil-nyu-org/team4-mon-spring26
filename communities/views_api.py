@@ -1,6 +1,7 @@
 """JSON API views for communities — consumed by map frontend and community pages."""
 
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum, Value, IntegerField
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
@@ -68,6 +69,13 @@ def my_community_api(request):
     recent_posts = (
         community.nta.posts.filter(is_active=True)
         .select_related("author")
+        .annotate(
+            vote_score_value=Coalesce(
+                Sum("votes__value"),
+                Value(0),
+                output_field=IntegerField(),
+            )
+        )
         .order_by("-created_at")[:3]
     )
 
@@ -89,6 +97,7 @@ def my_community_api(request):
                     "category_display": p.get_category_display(),
                     "created_at": p.created_at.isoformat(),
                     "reply_count": p.reply_count,
+                    "vote_score": p.vote_score_value,
                 }
                 for p in recent_posts
             ],
@@ -136,6 +145,13 @@ def community_posts_api(request, nta_code):
     posts = (
         Post.objects.filter(nta_id=nta_code, is_active=True)
         .select_related("author")
+        .annotate(
+            vote_score_value=Coalesce(
+                Sum("votes__value"),
+                Value(0),
+                output_field=IntegerField(),
+            )
+        )
         .order_by("-is_pinned", "-created_at")
     )
     total = posts.count()
@@ -158,6 +174,7 @@ def community_posts_api(request, nta_code):
                     "linked_address": p.linked_address,
                     "has_image": bool(p.image),
                     "reply_count": p.reply_count,
+                    "vote_score": p.vote_score_value,
                     "created_at": p.created_at.isoformat(),
                 }
                 for p in page_posts
@@ -175,6 +192,13 @@ def my_posts_api(request):
     posts = (
         Post.objects.filter(author=request.user, is_active=True)
         .select_related("nta")
+        .annotate(
+            vote_score_value=Coalesce(
+                Sum("votes__value"),
+                Value(0),
+                output_field=IntegerField(),
+            )
+        )
         .order_by("-created_at")
     )
 
@@ -189,6 +213,7 @@ def my_posts_api(request):
                     "category": p.category,
                     "category_display": p.get_category_display(),
                     "reply_count": p.reply_count,
+                    "vote_score": p.vote_score_value,
                     "created_at": p.created_at.isoformat(),
                 }
                 for p in posts

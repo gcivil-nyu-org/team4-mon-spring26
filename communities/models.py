@@ -105,6 +105,10 @@ class Post(models.Model):
     def reply_count(self):
         return self.comments.count()
 
+    @property
+    def vote_score(self):
+        return sum(self.votes.values_list("value", flat=True))
+
 
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
@@ -122,6 +126,31 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author.username} on {self.post.title}"
+
+
+class PostVote(models.Model):
+    VALUE_UPVOTE = 1
+    VALUE_DOWNVOTE = -1
+    VALUE_CHOICES = [
+        (VALUE_UPVOTE, "Upvote"),
+        (VALUE_DOWNVOTE, "Downvote"),
+    ]
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="votes")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="post_votes",
+    )
+    value = models.SmallIntegerField(choices=VALUE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("post", "user")
+
+    def __str__(self):
+        return f"{self.user.username} voted {self.value:+d} on {self.post.title}"
 
 
 class DirectMessage(models.Model):
