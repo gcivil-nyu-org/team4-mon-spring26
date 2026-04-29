@@ -24,6 +24,11 @@ python manage.py collectstatic --noinput >> $LOG_FILE 2>&1
 
 echo "$(date): Static files collected" >> $LOG_FILE
 
+# Stop any stuck ingestion jobs (jobs running > 24 hours)
+python manage.py stop_stuck_jobs --hours 24 >> $LOG_FILE 2>&1
+
+echo "$(date): Checked for stuck jobs" >> $LOG_FILE
+
 # Only run community setup once (marker file approach to avoid DB queries)
 # This avoids overhead on frequent deployments
 if [ ! -f "$SETUP_MARKER" ]; then
