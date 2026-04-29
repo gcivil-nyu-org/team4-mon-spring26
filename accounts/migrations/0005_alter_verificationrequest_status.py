@@ -6,13 +6,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0004_verificationrequest_latitude_and_more'),
+        ("accounts", "0004_verificationrequest_latitude_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='verificationrequest',
-            name='status',
-            field=models.CharField(choices=[('pending', 'Pending Review'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('withdrawn', 'Withdrawn')], db_index=True, default='pending', max_length=10),
+            model_name="verificationrequest",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending Review"),
+                    ("approved", "Approved"),
+                    ("rejected", "Rejected"),
+                    ("withdrawn", "Withdrawn"),
+                ],
+                db_index=True,
+                default="pending",
+                max_length=10,
+            ),
         ),
     ]

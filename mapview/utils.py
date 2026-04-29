@@ -54,7 +54,9 @@ def get_nta_code_from_coordinates(lat, lng):
     return None
 
 
-def calculate_risk_score(weighted_issue_count, min_log_weight=None, max_log_weight=None):
+def calculate_risk_score(
+    weighted_issue_count, min_log_weight=None, max_log_weight=None
+):
     """Convert weighted issue counts into a 0-10 score where 10 is safest.
 
     Scores are calibrated against the current recompute window so they preserve

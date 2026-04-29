@@ -119,13 +119,18 @@ class GeocodeEndpointTests(TestCase):
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
 
-        response = self.client.get(reverse("geocode"), {"q": "123 Prince St", "limit": 5})
+        response = self.client.get(
+            reverse("geocode"), {"q": "123 Prince St", "limit": 5}
+        )
         self.assertEqual(response.status_code, 200)
 
         payload = response.json()
         self.assertEqual(payload["query"], "123 Prince St")
         self.assertEqual(len(payload["results"]), 2)
-        self.assertEqual(payload["results"][0]["label"], mock_response.json.return_value["features"][0]["place_name"])
+        self.assertEqual(
+            payload["results"][0]["label"],
+            mock_response.json.return_value["features"][0]["place_name"],
+        )
 
 
 # ============================================================ #
@@ -400,14 +405,14 @@ class DashboardThresholdTests(TestCase):
     def test_dashboard_uses_default_thresholds_when_db_empty(self):
         response = self.client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '\\u0022High Risk\\u0022')
-        self.assertContains(response, '\\u0022#E33B1B\\u0022')
-        self.assertContains(response, '\\u0022Medium Risk\\u0022')
-        self.assertContains(response, '\\u0022#F8FC19\\u0022')
-        self.assertContains(response, '\\u0022Low Risk\\u0022')
-        self.assertContains(response, '\\u0022#25D60B\\u0022')
-        self.assertContains(response, '\\u0022No Risk\\u0022')
-        self.assertContains(response, '\\u0022#4A83FF\\u0022')
+        self.assertContains(response, "\\u0022High Risk\\u0022")
+        self.assertContains(response, "\\u0022#E33B1B\\u0022")
+        self.assertContains(response, "\\u0022Medium Risk\\u0022")
+        self.assertContains(response, "\\u0022#F8FC19\\u0022")
+        self.assertContains(response, "\\u0022Low Risk\\u0022")
+        self.assertContains(response, "\\u0022#25D60B\\u0022")
+        self.assertContains(response, "\\u0022No Risk\\u0022")
+        self.assertContains(response, "\\u0022#4A83FF\\u0022")
 
     def test_dashboard_uses_db_thresholds(self):
         ScoreThreshold.objects.create(name="Bad", color="#ff0000", max_score=3.0)
