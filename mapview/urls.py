@@ -39,8 +39,10 @@ from .views_subscription import (
     subscription_list_view,
     subscription_update_view,
 )
+from .views_health import health_check_view
 
 urlpatterns = [
+    path("health/", health_check_view, name="health-check"),
     path("", dashboard_view, name="dashboard"),
     path("ingestion-dashboard/", ingestion_dashboard_view, name="ingestion-dashboard"),
     path("api/nta-geojson/", nta_geojson_view, name="nta-geojson"),
