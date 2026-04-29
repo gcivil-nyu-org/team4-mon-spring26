@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .forms import (
     AdminVerificationReviewForm,
@@ -112,6 +113,14 @@ def request_verification_view(request):
         messages.info(request, "You are already a verified tenant.")
         return redirect("profile")
 
+    pending_request = (
+        request.user.verification_requests.filter(
+            status=VerificationRequest.STATUS_PENDING
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
     if request.method == "POST":
         form = VerificationRequestForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
@@ -126,7 +135,65 @@ def request_verification_view(request):
     else:
         form = VerificationRequestForm(user=request.user)
 
-    return render(request, "accounts/request_verification.html", {"form": form})
+    return render(
+        request,
+        "accounts/request_verification.html",
+        {
+            "form": form,
+            "pending_request": pending_request,
+        },
+    )
+
+
+@login_required
+def edit_verification_view(request, pk):
+    """Allow users to edit their own pending verification requests."""
+    vr = get_object_or_404(
+        VerificationRequest,
+        pk=pk,
+        user=request.user,
+        status=VerificationRequest.STATUS_PENDING,
+    )
+
+    if request.method == "POST":
+        form = VerificationRequestForm(
+            request.POST,
+            request.FILES,
+            instance=vr,
+            user=request.user,
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Verification request updated.")
+            return redirect("verification-status")
+    else:
+        form = VerificationRequestForm(instance=vr, user=request.user)
+
+    return render(
+        request,
+        "accounts/request_verification.html",
+        {
+            "form": form,
+            "verification_request": vr,
+            "is_editing": True,
+        },
+    )
+
+
+@login_required
+@require_POST
+def withdraw_verification_view(request, pk):
+    """Allow users to withdraw their own pending verification requests."""
+    vr = get_object_or_404(
+        VerificationRequest,
+        pk=pk,
+        user=request.user,
+        status=VerificationRequest.STATUS_PENDING,
+    )
+    vr.status = VerificationRequest.STATUS_WITHDRAWN
+    vr.save(update_fields=["status", "updated_at"])
+    messages.success(request, "Verification request withdrawn.")
+    return redirect("verification-status")
 
 
 @login_required

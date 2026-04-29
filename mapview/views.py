@@ -1,4 +1,5 @@
 import json
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 
@@ -39,6 +40,43 @@ BOUNDARY_LEVEL_PATHS = {
 MAPBOX_GEOCODE_BASE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 
 
+@lru_cache(maxsize=1)
+def _encoded_region_geometries():
+    """Load encoded NTA geometries for point-in-region filtering."""
+    try:
+        from shapely.geometry import shape
+    except ImportError:
+        return None
+
+    try:
+        with PROCESSED_GEOJSON_PATH.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+    geometries = []
+    for feature in payload.get("features", []):
+        geometry = feature.get("geometry")
+        if geometry:
+            geometries.append(shape(geometry))
+    return geometries
+
+
+def _is_within_encoded_regions(lng, lat):
+    """Return True when the point falls inside one of our encoded map regions."""
+    geometries = _encoded_region_geometries()
+    if geometries is None:
+        return True
+
+    try:
+        from shapely.geometry import Point
+    except ImportError:
+        return True
+
+    point = Point(lng, lat)
+    return any(geom.covers(point) for geom in geometries)
+
+
 def dashboard_view(request):
     thresholds = list(
         ScoreThreshold.objects.order_by("max_score").values(
@@ -49,9 +87,10 @@ def dashboard_view(request):
     # Defaults if none in DB
     if not thresholds:
         thresholds = [
-            {"name": "High Risk", "max_score": 5.0, "color": "#dc2626"},
-            {"name": "Medium Risk", "max_score": 7.5, "color": "#eab308"},
-            {"name": "Low Risk", "max_score": 10.0, "color": "#16a34a"},
+            {"name": "High Risk", "max_score": 4.0, "color": "#E33B1B"},
+            {"name": "Medium Risk", "max_score": 6.0, "color": "#F8FC19"},
+            {"name": "Low Risk", "max_score": 9.0, "color": "#25D60B"},
+            {"name": "No Risk", "max_score": 10.0, "color": "#4A83FF"},
         ]
 
     return render(
@@ -137,6 +176,12 @@ def geocode_view(request):
             status=400,
         )
 
+    try:
+        limit = int(request.GET.get("limit", 1))
+    except (TypeError, ValueError):
+        limit = 1
+    limit = max(1, min(5, limit))
+
     if not settings.MAPBOX_ACCESS_TOKEN:
         return JsonResponse(
             {"error": "MAPBOX_ACCESS_TOKEN is not configured on the server."},
@@ -148,7 +193,7 @@ def geocode_view(request):
     params = {
         "access_token": settings.MAPBOX_ACCESS_TOKEN,
         "autocomplete": "true",
-        "limit": 1,
+        "limit": limit,
         "types": "address,place",
         "bbox": "-74.25559,40.49612,-73.70001,40.91553",
     }
@@ -164,9 +209,35 @@ def geocode_view(request):
             {"error": "Geocoding service returned invalid data."}, status=502
         )
 
-    features = data.get("features", [])
+    features = []
+    for feature in data.get("features", []):
+        center = feature.get("center", [])
+        if len(center) != 2:
+            continue
+        lng, lat = center
+        if _is_within_encoded_regions(lng, lat):
+            features.append(feature)
+
     if not features:
-        return JsonResponse({"error": "No matching address found."}, status=404)
+        return JsonResponse(
+            {"error": "No matching address found within mapped NYC regions."},
+            status=404,
+        )
+
+    if limit > 1:
+        return JsonResponse(
+            {
+                "query": query,
+                "results": [
+                    {
+                        "label": feature.get("place_name", query),
+                        "lng": feature["center"][0],
+                        "lat": feature["center"][1],
+                    }
+                    for feature in features
+                ],
+            }
+        )
 
     top = features[0]
     center = top.get("center", [])

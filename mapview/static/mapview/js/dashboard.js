@@ -1,6 +1,10 @@
 (function initializeDashboard() {
   const nycCenter = [40.7128, -74.006];
   const nycZoom = 10;
+  const nycBounds = L.latLngBounds(
+    [40.43612, -74.33559],
+    [40.97553, -73.62001],
+  );
   const layerOrder = ["nta", "mid", "block"];
   const minZoomByLevel = {
     nta: 0,
@@ -18,9 +22,27 @@
   const statusElement = document.getElementById("status-message");
   const searchForm = document.getElementById("address-search-form");
   const searchInput = document.getElementById("address-search-input");
+  const suggestionsElement = document.getElementById("address-search-suggestions");
   const searchButton = searchForm.querySelector("button");
 
-  const map = L.map(mapElement).setView(nycCenter, nycZoom);
+  const map = L.map(mapElement, {
+    maxBounds: nycBounds,
+    maxBoundsViscosity: 0.2,
+  }).setView(nycCenter, nycZoom);
+  map.setMinZoom(map.getBoundsZoom(nycBounds));
+
+  function nudgeMapBackWithinBounds() {
+    if (!nycBounds.contains(map.getCenter())) {
+      map.panInsideBounds(nycBounds, {
+        animate: true,
+        duration: 1.4,
+        easeLinearity: 0.1,
+      });
+    }
+  }
+
+  map.on("dragend", nudgeMapBackWithinBounds);
+  map.on("moveend", nudgeMapBackWithinBounds);
   const mapboxToken = window.TENANTGUARD_CONFIG && window.TENANTGUARD_CONFIG.mapboxAccessToken;
   if (mapboxToken) {
     L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`, {
@@ -76,9 +98,10 @@
 
   function getFillColor(score) {
     const thresholds = window.TENANTGUARD_CONFIG?.thresholds || [
-      { max_score: 5, color: "#dc2626" },
-      { max_score: 7.5, color: "#eab308" },
-      { max_score: 10, color: "#16a34a" }
+      { max_score: 4, color: "#E33B1B" },
+      { max_score: 6, color: "#F8FC19" },
+      { max_score: 9, color: "#25D60B" },
+      { max_score: 10, color: "#4A83FF" }
     ];
     for (let t of thresholds) {
       if (score <= t.max_score) return t.color;
@@ -634,17 +657,73 @@
     return payload;
   }
 
-  async function onSearchSubmit(event) {
-    event.preventDefault();
+  async function fetchAddressSuggestions(query) {
+    const response = await fetch(`/api/geocode/?q=${encodeURIComponent(query)}&limit=5`);
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Address lookup failed.");
+    }
+    return payload.results || [];
+  }
+
+  let searchSuggestions = [];
+  let activeSuggestionIndex = -1;
+  let suggestionRequestId = 0;
+  let suggestionDebounceId = null;
+
+  function hideSuggestions() {
+    searchSuggestions = [];
+    activeSuggestionIndex = -1;
+    suggestionsElement.innerHTML = "";
+    suggestionsElement.classList.add("hidden");
+    searchInput.setAttribute("aria-expanded", "false");
+  }
+
+  function renderSuggestions(results) {
+    searchSuggestions = results;
+    activeSuggestionIndex = -1;
+    suggestionsElement.innerHTML = "";
+
+    if (!results.length) {
+      hideSuggestions();
+      return;
+    }
+
+    results.forEach((result, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "search-suggestion";
+      button.setAttribute("role", "option");
+      button.textContent = result.label;
+      button.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        chooseSuggestion(index);
+      });
+      suggestionsElement.appendChild(button);
+    });
+
+    suggestionsElement.classList.remove("hidden");
+    searchInput.setAttribute("aria-expanded", "true");
+  }
+
+  function updateActiveSuggestion() {
+    const options = suggestionsElement.querySelectorAll(".search-suggestion");
+    options.forEach((option, index) => {
+      option.classList.toggle("active", index === activeSuggestionIndex);
+    });
+  }
+
+  async function runAddressSearch(resultOverride = null) {
     const query = searchInput.value.trim();
     if (!query) {
       return;
     }
 
+    hideSuggestions();
     searchButton.disabled = true;
     setStatus("Searching address...");
     try {
-      const result = await geocodeAddress(query);
+      const result = resultOverride || (await geocodeAddress(query));
       map.flyTo([result.lat, result.lng], 17, { duration: 1 });
 
       const match = await findFeatureAcrossLevels(result.lng, result.lat);
@@ -667,12 +746,113 @@
     }
   }
 
+  function chooseSuggestion(index) {
+    const result = searchSuggestions[index];
+    if (!result) {
+      return;
+    }
+    searchInput.value = result.label;
+    runAddressSearch(result);
+  }
+
+  async function onSearchSubmit(event) {
+    event.preventDefault();
+    if (!searchInput.value.trim()) {
+      return;
+    }
+    if (activeSuggestionIndex >= 0 && searchSuggestions[activeSuggestionIndex]) {
+      chooseSuggestion(activeSuggestionIndex);
+      return;
+    }
+    runAddressSearch();
+  }
+
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value.trim();
+    if (suggestionDebounceId) {
+      clearTimeout(suggestionDebounceId);
+    }
+    if (query.length < 3) {
+      hideSuggestions();
+      return;
+    }
+
+    suggestionDebounceId = setTimeout(async () => {
+      const currentRequestId = ++suggestionRequestId;
+      try {
+        const results = await fetchAddressSuggestions(query);
+        if (currentRequestId !== suggestionRequestId) {
+          return;
+        }
+        renderSuggestions(results);
+      } catch (error) {
+        if (currentRequestId !== suggestionRequestId) {
+          return;
+        }
+        hideSuggestions();
+      }
+    }, 180);
+  });
+
+  searchInput.addEventListener("keydown", (event) => {
+    if (suggestionsElement.classList.contains("hidden") || !searchSuggestions.length) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activeSuggestionIndex = (activeSuggestionIndex + 1) % searchSuggestions.length;
+      updateActiveSuggestion();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activeSuggestionIndex =
+        (activeSuggestionIndex - 1 + searchSuggestions.length) % searchSuggestions.length;
+      updateActiveSuggestion();
+    } else if (event.key === "Escape") {
+      hideSuggestions();
+    }
+  });
+
+  searchInput.addEventListener("blur", () => {
+    window.setTimeout(() => hideSuggestions(), 120);
+  });
+
+  searchInput.addEventListener("focus", () => {
+    if (searchSuggestions.length) {
+      suggestionsElement.classList.remove("hidden");
+      searchInput.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!searchForm.contains(event.target)) {
+      hideSuggestions();
+    }
+  });
+
   searchForm.addEventListener("submit", onSearchSubmit);
 
   /* ---- My Community marker + Return button ------------------------------ */
 
   let myMarker = null;
   let myNtaCode = null;
+  let utilityControls = null;
+  let utilityControlsInner = null;
+
+  function getUtilityControlsInner() {
+    if (utilityControlsInner) return utilityControlsInner;
+
+    utilityControls = L.control({ position: 'topright' });
+    utilityControls.onAdd = function() {
+      const outer = L.DomUtil.create('div', 'map-utility-controls');
+      const inner = L.DomUtil.create('div', 'leaflet-bar map-utility-controls-inner', outer);
+      L.DomEvent.disableClickPropagation(outer);
+      utilityControlsInner = inner;
+      return outer;
+    };
+    utilityControls.addTo(map);
+    return utilityControlsInner;
+  }
 
   async function loadMyMarker() {
     try {
@@ -691,23 +871,21 @@
         .bindPopup(`<strong>My Home</strong><br/>${data.nta_name}<br/>Score: ${data.risk_score}/10<br/>${data.member_count} members · ${data.post_count} posts`)
         .addTo(map);
 
-      // Add Return to My Community button
-      const returnBtn = L.control({ position: 'topright' });
-      returnBtn.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar');
-        div.innerHTML = '<a href="#" title="Return to My Community" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#fff;font-size:18px;text-decoration:none;color:#2563eb;">&#127968;</a>';
-        div.querySelector('a').addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (myMarker) {
-            map.flyTo(myMarker.getLatLng(), 14, { duration: 0.8 });
-            myMarker.openPopup();
-          }
-        });
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-      };
-      returnBtn.addTo(map);
+      const controlGroup = getUtilityControlsInner();
+      const btn = document.createElement('a');
+      btn.href = '#';
+      btn.title = 'Return to My Community';
+      btn.className = 'map-control-button map-control-button-home';
+      btn.innerHTML = '&#127968;';
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (myMarker) {
+          map.flyTo(myMarker.getLatLng(), 14, { duration: 0.8 });
+          myMarker.openPopup();
+        }
+      });
+      controlGroup.appendChild(btn);
     } catch (err) {
       // Silently fail — user may not be authenticated or verified
     }
@@ -725,20 +903,19 @@
 
       const maxActivity = Math.max(...data.communities.map(c => c.activity_score), 1);
 
-      // Add toggle control
-      const toggleCtrl = L.control({ position: 'topright' });
-      toggleCtrl.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar');
-        div.innerHTML = '<a href="#" id="activity-toggle" title="Toggle Community Activity" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#fff;font-size:16px;text-decoration:none;color:#475569;">&#128293;</a>';
-        div.querySelector('a').addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleActivity(data.communities, maxActivity);
-        });
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-      };
-      toggleCtrl.addTo(map);
+      const controlGroup = getUtilityControlsInner();
+      const btn = document.createElement('a');
+      btn.href = '#';
+      btn.id = 'activity-toggle';
+      btn.title = 'Toggle Community Activity';
+      btn.className = 'map-control-button map-control-button-activity';
+      btn.innerHTML = '&#128293;';
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleActivity(data.communities, maxActivity);
+      });
+      controlGroup.appendChild(btn);
     } catch (err) {
       // Silently fail
     }

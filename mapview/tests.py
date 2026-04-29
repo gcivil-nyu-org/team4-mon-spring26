@@ -1,5 +1,6 @@
 import json
-from datetime import date
+import math
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +22,7 @@ from .models import (
     ScoreRecencyConfig,
     ScoreThreshold,
 )
+from .utils import calculate_risk_score
 
 User = get_user_model()
 
@@ -97,6 +99,38 @@ class GeocodeEndpointTests(TestCase):
         self.assertIn("label", payload)
         self.assertEqual(payload["lng"], -73.997)
         self.assertEqual(payload["lat"], 40.724)
+
+    @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.requests.get")
+    def test_geocode_autocomplete_returns_multiple_results(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "features": [
+                {
+                    "place_name": "123 Prince St, New York, New York 10012, United States",
+                    "center": [-73.997, 40.724],
+                },
+                {
+                    "place_name": "123 Prince St, Brooklyn, New York 11201, United States",
+                    "center": [-73.99, 40.695],
+                },
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        response = self.client.get(
+            reverse("geocode"), {"q": "123 Prince St", "limit": 5}
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        self.assertEqual(payload["query"], "123 Prince St")
+        self.assertEqual(len(payload["results"]), 2)
+        self.assertEqual(
+            payload["results"][0]["label"],
+            mock_response.json.return_value["features"][0]["place_name"],
+        )
 
 
 # ============================================================ #
@@ -368,6 +402,18 @@ class ScoreThresholdModelTests(TestCase):
 
 
 class DashboardThresholdTests(TestCase):
+    def test_dashboard_uses_default_thresholds_when_db_empty(self):
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "\\u0022High Risk\\u0022")
+        self.assertContains(response, "\\u0022#E33B1B\\u0022")
+        self.assertContains(response, "\\u0022Medium Risk\\u0022")
+        self.assertContains(response, "\\u0022#F8FC19\\u0022")
+        self.assertContains(response, "\\u0022Low Risk\\u0022")
+        self.assertContains(response, "\\u0022#25D60B\\u0022")
+        self.assertContains(response, "\\u0022No Risk\\u0022")
+        self.assertContains(response, "\\u0022#4A83FF\\u0022")
+
     def test_dashboard_uses_db_thresholds(self):
         ScoreThreshold.objects.create(name="Bad", color="#ff0000", max_score=3.0)
         ScoreThreshold.objects.create(name="OK", color="#00ff00", max_score=10.0)
@@ -426,7 +472,29 @@ class GeocodeEdgeCaseTests(TestCase):
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
         response = self.client.get(reverse("geocode"), {"q": "123 Main St"})
-        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views._is_within_encoded_regions", side_effect=[False, True])
+    @patch("mapview.views.requests.get")
+    def test_geocode_filters_out_results_outside_encoded_regions(
+        self, mock_get, mock_is_within
+    ):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "features": [
+                {"place_name": "Outside", "center": [-74.3, 40.8]},
+                {"place_name": "Inside", "center": [-73.997, 40.724]},
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        response = self.client.get(reverse("geocode"), {"q": "123 Main St"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["label"], "Inside")
+        self.assertEqual(mock_is_within.call_count, 2)
 
 
 # ============================================================ #
@@ -493,6 +561,75 @@ class ComputeRiskScoresCommandTests(TestCase):
         score = NTARiskScore.objects.get(nta_code=sample_code)
         self.assertEqual(score.risk_score, 10.0)
         self.assertIn("Lower-risk", score.summary)
+
+    def test_compute_scores_respects_recency_window(self):
+        response = self.client.get(reverse("boundaries"), {"level": "nta"})
+        payload = response.json()
+        sample_code = payload["features"][0]["properties"]["nta_code"]
+
+        config = ScoreRecencyConfig.load()
+        config.recency_window = "1m"
+        config.save(update_fields=["recency_window"])
+
+        recent_dt = timezone.now() - timedelta(days=7)
+        old_dt = timezone.now() - timedelta(days=120)
+
+        HPDViolation.objects.create(
+            violation_id=9100,
+            violation_class="C",
+            nta_code=sample_code,
+            inspection_date=recent_dt.date(),
+        )
+        HPDViolation.objects.create(
+            violation_id=9101,
+            violation_class="C",
+            nta_code=sample_code,
+            inspection_date=old_dt.date(),
+        )
+        Complaint311.objects.create(
+            unique_key="C9100",
+            complaint_type="HEAT/HOT WATER",
+            nta_code=sample_code,
+            created_date=recent_dt,
+        )
+        Complaint311.objects.create(
+            unique_key="C9101",
+            complaint_type="HEAT/HOT WATER",
+            nta_code=sample_code,
+            created_date=old_dt,
+        )
+
+        call_command("compute_risk_scores")
+
+        score = NTARiskScore.objects.get(nta_code=sample_code)
+        self.assertEqual(score.total_violations, 1)
+        self.assertEqual(score.total_complaints, 1)
+
+    def test_compute_scores_preserve_spread_for_weighted_ntas(self):
+        response = self.client.get(reverse("boundaries"), {"level": "nta"})
+        payload = response.json()
+        low_code = payload["features"][0]["properties"]["nta_code"]
+        high_code = payload["features"][1]["properties"]["nta_code"]
+
+        HPDViolation.objects.create(
+            violation_id=9200,
+            violation_class="A",
+            nta_code=low_code,
+            inspection_date=date(2025, 6, 1),
+        )
+        for idx in range(6):
+            HPDViolation.objects.create(
+                violation_id=9300 + idx,
+                violation_class="C",
+                nta_code=high_code,
+                inspection_date=date(2025, 6, 1),
+            )
+
+        call_command("compute_risk_scores")
+
+        low_score = NTARiskScore.objects.get(nta_code=low_code).risk_score
+        high_score = NTARiskScore.objects.get(nta_code=high_code).risk_score
+        self.assertGreater(low_score, high_score)
 
     @patch(
         "mapview.management.commands.compute_risk_scores.NTA_GEOJSON_PATH",
@@ -766,6 +903,13 @@ class ScoreRecencyConfigModelTests(TestCase):
     def test_default_is_all(self):
         c = ScoreRecencyConfig.load()
         self.assertEqual(c.recency_window, "all")
+
+
+class RiskScoreUtilityTests(TestCase):
+    def test_calibrated_score_uses_full_scale(self):
+        self.assertEqual(calculate_risk_score(0, 0.0, 3.0), 10.0)
+        self.assertEqual(calculate_risk_score(1, 0.0, math.log1p(100)), 8.5)
+        self.assertEqual(calculate_risk_score(100, 0.0, math.log1p(100)), 0.0)
 
 
 # ============================================================ #

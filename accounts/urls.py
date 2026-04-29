@@ -17,6 +17,16 @@ urlpatterns = [
     path("profile/", views.profile_view, name="profile"),
     # Tenant verification
     path("verify/", views.request_verification_view, name="request-verification"),
+    path(
+        "verify/<int:pk>/edit/",
+        views.edit_verification_view,
+        name="edit-verification",
+    ),
+    path(
+        "verify/<int:pk>/withdraw/",
+        views.withdraw_verification_view,
+        name="withdraw-verification",
+    ),
     path("verify/status/", views.verification_status_view, name="verification-status"),
     # Admin moderation
     path(
