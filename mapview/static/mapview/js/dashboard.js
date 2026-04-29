@@ -1,6 +1,10 @@
 (function initializeDashboard() {
   const nycCenter = [40.7128, -74.006];
   const nycZoom = 10;
+  const nycBounds = L.latLngBounds(
+    [40.49612, -74.25559],
+    [40.91553, -73.70001],
+  );
   const layerOrder = ["nta", "mid", "block"];
   const minZoomByLevel = {
     nta: 0,
@@ -20,7 +24,11 @@
   const searchInput = document.getElementById("address-search-input");
   const searchButton = searchForm.querySelector("button");
 
-  const map = L.map(mapElement).setView(nycCenter, nycZoom);
+  const map = L.map(mapElement, {
+    maxBounds: nycBounds,
+    maxBoundsViscosity: 1.0,
+  }).setView(nycCenter, nycZoom);
+  map.setMinZoom(map.getBoundsZoom(nycBounds));
   const mapboxToken = window.TENANTGUARD_CONFIG && window.TENANTGUARD_CONFIG.mapboxAccessToken;
   if (mapboxToken) {
     L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`, {
