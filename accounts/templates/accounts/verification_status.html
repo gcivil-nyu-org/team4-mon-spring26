@@ -20,7 +20,7 @@
       <div class="vr-card vr-{{ vr.status }}">
         <div class="vr-card-header">
           <span class="vr-badge vr-badge-{{ vr.status }}">
-            {% if vr.is_pending %}⏳ Pending{% elif vr.is_approved %}✅ Approved{% else %}❌ Rejected{% endif %}
+            {% if vr.is_pending %}⏳ Pending{% elif vr.is_approved %}✅ Approved{% elif vr.is_rejected %}❌ Rejected{% else %}↩️ Withdrawn{% endif %}
           </span>
           <span class="vr-date">{{ vr.created_at|date:"M d, Y" }}</span>
         </div>
@@ -44,6 +44,16 @@
 
         {% if vr.reviewed_at %}
         <p class="vr-reviewed">Reviewed {{ vr.reviewed_at|date:"M d, Y" }}{% if vr.reviewed_by %} by {{ vr.reviewed_by.get_short_name|default:vr.reviewed_by.username }}{% endif %}</p>
+        {% endif %}
+
+        {% if vr.is_pending %}
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem;">
+          <a href="{% url 'edit-verification' vr.pk %}" class="btn btn-secondary">Edit Request</a>
+          <form method="post" action="{% url 'withdraw-verification' vr.pk %}" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-secondary">Withdraw Request</button>
+          </form>
+        </div>
         {% endif %}
       </div>
       {% endfor %}

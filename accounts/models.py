@@ -114,11 +114,13 @@ class VerificationRequest(models.Model):
     STATUS_PENDING = "pending"
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
+    STATUS_WITHDRAWN = "withdrawn"
 
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending Review"),
         (STATUS_APPROVED, "Approved"),
         (STATUS_REJECTED, "Rejected"),
+        (STATUS_WITHDRAWN, "Withdrawn"),
     ]
 
     DOCUMENT_TYPE_CHOICES = [
@@ -203,3 +205,7 @@ class VerificationRequest(models.Model):
     @property
     def is_rejected(self):
         return self.status == self.STATUS_REJECTED
+
+    @property
+    def is_withdrawn(self):
+        return self.status == self.STATUS_WITHDRAWN

@@ -165,11 +165,17 @@ class VerificationRequestForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        if self.user and self.user.has_pending_verification:
-            raise forms.ValidationError(
-                "You already have a verification request pending review. "
-                "Please wait for it to be processed before submitting a new one."
+        if self.user:
+            pending_requests = self.user.verification_requests.filter(
+                status=VerificationRequest.STATUS_PENDING
             )
+            if self.instance.pk:
+                pending_requests = pending_requests.exclude(pk=self.instance.pk)
+            if pending_requests.exists():
+                raise forms.ValidationError(
+                    "You already have a verification request pending review. "
+                    "Please wait for it to be processed before submitting a new one."
+                )
         return cleaned
 
     def save(self, commit=True):
