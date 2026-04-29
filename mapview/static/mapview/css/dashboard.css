@@ -80,6 +80,41 @@ body {
   min-height: 24rem;
 }
 
+.map-utility-controls {
+  margin-top: 12px;
+  margin-right: 12px;
+}
+
+.map-utility-controls-inner {
+  display: flex;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.map-control-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  font-size: 18px;
+  text-decoration: none;
+}
+
+.map-control-button + .map-control-button {
+  border-left: 1px solid #e2e8f0;
+}
+
+.map-control-button-home {
+  color: #2563eb;
+}
+
+.map-control-button-activity {
+  color: #475569;
+  font-size: 16px;
+}
+
 /* Status messages */
 .status-message {
   padding: 0.75rem 1rem;

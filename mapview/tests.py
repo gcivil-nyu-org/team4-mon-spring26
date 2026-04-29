@@ -370,6 +370,22 @@ class ScoreThresholdModelTests(TestCase):
 
 
 class DashboardThresholdTests(TestCase):
+    def test_dashboard_uses_default_thresholds_when_db_empty(self):
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, '"name": "High Risk", "max_score": 4.0, "color": "#E33B1B"'
+        )
+        self.assertContains(
+            response, '"name": "Medium Risk", "max_score": 6.0, "color": "#F8FC19"'
+        )
+        self.assertContains(
+            response, '"name": "Low Risk", "max_score": 9.0, "color": "#25D60B"'
+        )
+        self.assertContains(
+            response, '"name": "No Risk", "max_score": 10.0, "color": "#4A83FF"'
+        )
+
     def test_dashboard_uses_db_thresholds(self):
         ScoreThreshold.objects.create(name="Bad", color="#ff0000", max_score=3.0)
         ScoreThreshold.objects.create(name="OK", color="#00ff00", max_score=10.0)

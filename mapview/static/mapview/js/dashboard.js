@@ -76,9 +76,10 @@
 
   function getFillColor(score) {
     const thresholds = window.TENANTGUARD_CONFIG?.thresholds || [
-      { max_score: 5, color: "#dc2626" },
-      { max_score: 7.5, color: "#eab308" },
-      { max_score: 10, color: "#16a34a" }
+      { max_score: 4, color: "#E33B1B" },
+      { max_score: 6, color: "#F8FC19" },
+      { max_score: 9, color: "#25D60B" },
+      { max_score: 10, color: "#4A83FF" }
     ];
     for (let t of thresholds) {
       if (score <= t.max_score) return t.color;
@@ -673,6 +674,23 @@
 
   let myMarker = null;
   let myNtaCode = null;
+  let utilityControls = null;
+  let utilityControlsInner = null;
+
+  function getUtilityControlsInner() {
+    if (utilityControlsInner) return utilityControlsInner;
+
+    utilityControls = L.control({ position: 'topright' });
+    utilityControls.onAdd = function() {
+      const outer = L.DomUtil.create('div', 'map-utility-controls');
+      const inner = L.DomUtil.create('div', 'leaflet-bar map-utility-controls-inner', outer);
+      L.DomEvent.disableClickPropagation(outer);
+      utilityControlsInner = inner;
+      return outer;
+    };
+    utilityControls.addTo(map);
+    return utilityControlsInner;
+  }
 
   async function loadMyMarker() {
     try {
@@ -691,23 +709,21 @@
         .bindPopup(`<strong>My Home</strong><br/>${data.nta_name}<br/>Score: ${data.risk_score}/10<br/>${data.member_count} members · ${data.post_count} posts`)
         .addTo(map);
 
-      // Add Return to My Community button
-      const returnBtn = L.control({ position: 'topright' });
-      returnBtn.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar');
-        div.innerHTML = '<a href="#" title="Return to My Community" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#fff;font-size:18px;text-decoration:none;color:#2563eb;">&#127968;</a>';
-        div.querySelector('a').addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (myMarker) {
-            map.flyTo(myMarker.getLatLng(), 14, { duration: 0.8 });
-            myMarker.openPopup();
-          }
-        });
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-      };
-      returnBtn.addTo(map);
+      const controlGroup = getUtilityControlsInner();
+      const btn = document.createElement('a');
+      btn.href = '#';
+      btn.title = 'Return to My Community';
+      btn.className = 'map-control-button map-control-button-home';
+      btn.innerHTML = '&#127968;';
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (myMarker) {
+          map.flyTo(myMarker.getLatLng(), 14, { duration: 0.8 });
+          myMarker.openPopup();
+        }
+      });
+      controlGroup.appendChild(btn);
     } catch (err) {
       // Silently fail — user may not be authenticated or verified
     }
@@ -725,20 +741,19 @@
 
       const maxActivity = Math.max(...data.communities.map(c => c.activity_score), 1);
 
-      // Add toggle control
-      const toggleCtrl = L.control({ position: 'topright' });
-      toggleCtrl.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar');
-        div.innerHTML = '<a href="#" id="activity-toggle" title="Toggle Community Activity" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:#fff;font-size:16px;text-decoration:none;color:#475569;">&#128293;</a>';
-        div.querySelector('a').addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleActivity(data.communities, maxActivity);
-        });
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-      };
-      toggleCtrl.addTo(map);
+      const controlGroup = getUtilityControlsInner();
+      const btn = document.createElement('a');
+      btn.href = '#';
+      btn.id = 'activity-toggle';
+      btn.title = 'Toggle Community Activity';
+      btn.className = 'map-control-button map-control-button-activity';
+      btn.innerHTML = '&#128293;';
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleActivity(data.communities, maxActivity);
+      });
+      controlGroup.appendChild(btn);
     } catch (err) {
       // Silently fail
     }

@@ -49,9 +49,10 @@ def dashboard_view(request):
     # Defaults if none in DB
     if not thresholds:
         thresholds = [
-            {"name": "High Risk", "max_score": 5.0, "color": "#dc2626"},
-            {"name": "Medium Risk", "max_score": 7.5, "color": "#eab308"},
-            {"name": "Low Risk", "max_score": 10.0, "color": "#16a34a"},
+            {"name": "High Risk", "max_score": 4.0, "color": "#E33B1B"},
+            {"name": "Medium Risk", "max_score": 6.0, "color": "#F8FC19"},
+            {"name": "Low Risk", "max_score": 9.0, "color": "#25D60B"},
+            {"name": "No Risk", "max_score": 10.0, "color": "#4A83FF"},
         ]
 
     return render(
