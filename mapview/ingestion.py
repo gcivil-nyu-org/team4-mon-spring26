@@ -566,7 +566,7 @@ def _send_risk_change_alerts(job):
 
 
 def _assign_nta_codes_spatial(nta_data):
-    """Point-in-polygon assignment using shapely."""
+    """Point-in-polygon assignment using shapely with batch updates."""
     try:
         from shapely.geometry import Point, shape
         from shapely.strtree import STRtree
@@ -585,6 +585,8 @@ def _assign_nta_codes_spatial(nta_data):
 
     tree = STRtree(nta_geoms)
 
+    # Process HPD violations in batches
+    violations_to_update = []
     for v in HPDViolation.objects.filter(
         nta_code="", latitude__isnull=False, longitude__isnull=False
     ).iterator(chunk_size=2000):
@@ -592,9 +594,20 @@ def _assign_nta_codes_spatial(nta_data):
         for idx in tree.query(pt):
             if nta_geoms[int(idx)].contains(pt):
                 v.nta_code = nta_codes[int(idx)]
-                v.save(update_fields=["nta_code"])
+                violations_to_update.append(v)
                 break
 
+        # Batch update every 500 records
+        if len(violations_to_update) >= 500:
+            HPDViolation.objects.bulk_update(violations_to_update, ["nta_code"])
+            violations_to_update = []
+
+    # Update remaining violations
+    if violations_to_update:
+        HPDViolation.objects.bulk_update(violations_to_update, ["nta_code"])
+
+    # Process 311 complaints in batches
+    complaints_to_update = []
     for c in Complaint311.objects.filter(
         nta_code="", latitude__isnull=False, longitude__isnull=False
     ).iterator(chunk_size=2000):
@@ -602,5 +615,14 @@ def _assign_nta_codes_spatial(nta_data):
         for idx in tree.query(pt):
             if nta_geoms[int(idx)].contains(pt):
                 c.nta_code = nta_codes[int(idx)]
-                c.save(update_fields=["nta_code"])
+                complaints_to_update.append(c)
                 break
+
+        # Batch update every 500 records
+        if len(complaints_to_update) >= 500:
+            Complaint311.objects.bulk_update(complaints_to_update, ["nta_code"])
+            complaints_to_update = []
+
+    # Update remaining complaints
+    if complaints_to_update:
+        Complaint311.objects.bulk_update(complaints_to_update, ["nta_code"])
