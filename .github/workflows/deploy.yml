@@ -65,5 +65,6 @@ jobs:
         version_label: "github-${{ github.sha }}-${{ steps.timestamp.outputs.timestamp }}"
         region: us-east-1
         deployment_package: deploy.zip
-        wait_for_deployment: false
-        wait_for_environment_recovery: 180
+        wait_for_deployment: true
+        wait_for_environment_recovery: 600
+        use_existing_version_if_available: false
