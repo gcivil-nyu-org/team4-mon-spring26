@@ -1,5 +1,6 @@
 import json
-from datetime import date
+import math
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +22,7 @@ from .models import (
     ScoreRecencyConfig,
     ScoreThreshold,
 )
+from .utils import calculate_risk_score
 
 User = get_user_model()
 
@@ -494,6 +496,75 @@ class ComputeRiskScoresCommandTests(TestCase):
         self.assertEqual(score.risk_score, 10.0)
         self.assertIn("Lower-risk", score.summary)
 
+    def test_compute_scores_respects_recency_window(self):
+        response = self.client.get(reverse("boundaries"), {"level": "nta"})
+        payload = response.json()
+        sample_code = payload["features"][0]["properties"]["nta_code"]
+
+        config = ScoreRecencyConfig.load()
+        config.recency_window = "1m"
+        config.save(update_fields=["recency_window"])
+
+        recent_dt = timezone.now() - timedelta(days=7)
+        old_dt = timezone.now() - timedelta(days=120)
+
+        HPDViolation.objects.create(
+            violation_id=9100,
+            violation_class="C",
+            nta_code=sample_code,
+            inspection_date=recent_dt.date(),
+        )
+        HPDViolation.objects.create(
+            violation_id=9101,
+            violation_class="C",
+            nta_code=sample_code,
+            inspection_date=old_dt.date(),
+        )
+        Complaint311.objects.create(
+            unique_key="C9100",
+            complaint_type="HEAT/HOT WATER",
+            nta_code=sample_code,
+            created_date=recent_dt,
+        )
+        Complaint311.objects.create(
+            unique_key="C9101",
+            complaint_type="HEAT/HOT WATER",
+            nta_code=sample_code,
+            created_date=old_dt,
+        )
+
+        call_command("compute_risk_scores")
+
+        score = NTARiskScore.objects.get(nta_code=sample_code)
+        self.assertEqual(score.total_violations, 1)
+        self.assertEqual(score.total_complaints, 1)
+
+    def test_compute_scores_preserve_spread_for_weighted_ntas(self):
+        response = self.client.get(reverse("boundaries"), {"level": "nta"})
+        payload = response.json()
+        low_code = payload["features"][0]["properties"]["nta_code"]
+        high_code = payload["features"][1]["properties"]["nta_code"]
+
+        HPDViolation.objects.create(
+            violation_id=9200,
+            violation_class="A",
+            nta_code=low_code,
+            inspection_date=date(2025, 6, 1),
+        )
+        for idx in range(6):
+            HPDViolation.objects.create(
+                violation_id=9300 + idx,
+                violation_class="C",
+                nta_code=high_code,
+                inspection_date=date(2025, 6, 1),
+            )
+
+        call_command("compute_risk_scores")
+
+        low_score = NTARiskScore.objects.get(nta_code=low_code).risk_score
+        high_score = NTARiskScore.objects.get(nta_code=high_code).risk_score
+        self.assertGreater(low_score, high_score)
+
     @patch(
         "mapview.management.commands.compute_risk_scores.NTA_GEOJSON_PATH",
         Path("/nonexistent/path.geojson"),
@@ -766,6 +837,13 @@ class ScoreRecencyConfigModelTests(TestCase):
     def test_default_is_all(self):
         c = ScoreRecencyConfig.load()
         self.assertEqual(c.recency_window, "all")
+
+
+class RiskScoreUtilityTests(TestCase):
+    def test_calibrated_score_uses_full_scale(self):
+        self.assertEqual(calculate_risk_score(0, 0.0, 3.0), 10.0)
+        self.assertEqual(calculate_risk_score(1, 0.0, math.log1p(100)), 8.5)
+        self.assertEqual(calculate_risk_score(100, 0.0, math.log1p(100)), 0.0)
 
 
 # ============================================================ #
