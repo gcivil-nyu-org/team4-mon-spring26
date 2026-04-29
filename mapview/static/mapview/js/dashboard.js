@@ -2,8 +2,8 @@
   const nycCenter = [40.7128, -74.006];
   const nycZoom = 10;
   const nycBounds = L.latLngBounds(
-    [40.49612, -74.25559],
-    [40.91553, -73.70001],
+    [40.43612, -74.33559],
+    [40.97553, -73.62001],
   );
   const layerOrder = ["nta", "mid", "block"];
   const minZoomByLevel = {
@@ -22,13 +22,27 @@
   const statusElement = document.getElementById("status-message");
   const searchForm = document.getElementById("address-search-form");
   const searchInput = document.getElementById("address-search-input");
+  const suggestionsElement = document.getElementById("address-search-suggestions");
   const searchButton = searchForm.querySelector("button");
 
   const map = L.map(mapElement, {
     maxBounds: nycBounds,
-    maxBoundsViscosity: 1.0,
+    maxBoundsViscosity: 0.2,
   }).setView(nycCenter, nycZoom);
   map.setMinZoom(map.getBoundsZoom(nycBounds));
+
+  function nudgeMapBackWithinBounds() {
+    if (!nycBounds.contains(map.getCenter())) {
+      map.panInsideBounds(nycBounds, {
+        animate: true,
+        duration: 1.4,
+        easeLinearity: 0.1,
+      });
+    }
+  }
+
+  map.on("dragend", nudgeMapBackWithinBounds);
+  map.on("moveend", nudgeMapBackWithinBounds);
   const mapboxToken = window.TENANTGUARD_CONFIG && window.TENANTGUARD_CONFIG.mapboxAccessToken;
   if (mapboxToken) {
     L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`, {
@@ -643,17 +657,73 @@
     return payload;
   }
 
-  async function onSearchSubmit(event) {
-    event.preventDefault();
+  async function fetchAddressSuggestions(query) {
+    const response = await fetch(`/api/geocode/?q=${encodeURIComponent(query)}&limit=5`);
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Address lookup failed.");
+    }
+    return payload.results || [];
+  }
+
+  let searchSuggestions = [];
+  let activeSuggestionIndex = -1;
+  let suggestionRequestId = 0;
+  let suggestionDebounceId = null;
+
+  function hideSuggestions() {
+    searchSuggestions = [];
+    activeSuggestionIndex = -1;
+    suggestionsElement.innerHTML = "";
+    suggestionsElement.classList.add("hidden");
+    searchInput.setAttribute("aria-expanded", "false");
+  }
+
+  function renderSuggestions(results) {
+    searchSuggestions = results;
+    activeSuggestionIndex = -1;
+    suggestionsElement.innerHTML = "";
+
+    if (!results.length) {
+      hideSuggestions();
+      return;
+    }
+
+    results.forEach((result, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "search-suggestion";
+      button.setAttribute("role", "option");
+      button.textContent = result.label;
+      button.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        chooseSuggestion(index);
+      });
+      suggestionsElement.appendChild(button);
+    });
+
+    suggestionsElement.classList.remove("hidden");
+    searchInput.setAttribute("aria-expanded", "true");
+  }
+
+  function updateActiveSuggestion() {
+    const options = suggestionsElement.querySelectorAll(".search-suggestion");
+    options.forEach((option, index) => {
+      option.classList.toggle("active", index === activeSuggestionIndex);
+    });
+  }
+
+  async function runAddressSearch(resultOverride = null) {
     const query = searchInput.value.trim();
     if (!query) {
       return;
     }
 
+    hideSuggestions();
     searchButton.disabled = true;
     setStatus("Searching address...");
     try {
-      const result = await geocodeAddress(query);
+      const result = resultOverride || (await geocodeAddress(query));
       map.flyTo([result.lat, result.lng], 17, { duration: 1 });
 
       const match = await findFeatureAcrossLevels(result.lng, result.lat);
@@ -675,6 +745,90 @@
       searchButton.disabled = false;
     }
   }
+
+  function chooseSuggestion(index) {
+    const result = searchSuggestions[index];
+    if (!result) {
+      return;
+    }
+    searchInput.value = result.label;
+    runAddressSearch(result);
+  }
+
+  async function onSearchSubmit(event) {
+    event.preventDefault();
+    if (!searchInput.value.trim()) {
+      return;
+    }
+    if (activeSuggestionIndex >= 0 && searchSuggestions[activeSuggestionIndex]) {
+      chooseSuggestion(activeSuggestionIndex);
+      return;
+    }
+    runAddressSearch();
+  }
+
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value.trim();
+    if (suggestionDebounceId) {
+      clearTimeout(suggestionDebounceId);
+    }
+    if (query.length < 3) {
+      hideSuggestions();
+      return;
+    }
+
+    suggestionDebounceId = setTimeout(async () => {
+      const currentRequestId = ++suggestionRequestId;
+      try {
+        const results = await fetchAddressSuggestions(query);
+        if (currentRequestId !== suggestionRequestId) {
+          return;
+        }
+        renderSuggestions(results);
+      } catch (error) {
+        if (currentRequestId !== suggestionRequestId) {
+          return;
+        }
+        hideSuggestions();
+      }
+    }, 180);
+  });
+
+  searchInput.addEventListener("keydown", (event) => {
+    if (suggestionsElement.classList.contains("hidden") || !searchSuggestions.length) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activeSuggestionIndex = (activeSuggestionIndex + 1) % searchSuggestions.length;
+      updateActiveSuggestion();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activeSuggestionIndex =
+        (activeSuggestionIndex - 1 + searchSuggestions.length) % searchSuggestions.length;
+      updateActiveSuggestion();
+    } else if (event.key === "Escape") {
+      hideSuggestions();
+    }
+  });
+
+  searchInput.addEventListener("blur", () => {
+    window.setTimeout(() => hideSuggestions(), 120);
+  });
+
+  searchInput.addEventListener("focus", () => {
+    if (searchSuggestions.length) {
+      suggestionsElement.classList.remove("hidden");
+      searchInput.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!searchForm.contains(event.target)) {
+      hideSuggestions();
+    }
+  });
 
   searchForm.addEventListener("submit", onSearchSubmit);
 

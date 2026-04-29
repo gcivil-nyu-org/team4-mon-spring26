@@ -20,13 +20,23 @@
       <header class="toolbar">
         <h1>NYC Livability Map</h1>
         <form id="address-search-form" class="search-form" autocomplete="off">
-          <input
-            id="address-search-input"
-            type="text"
-            placeholder="Search address (e.g. 123 Prince St)"
-            aria-label="Address search"
-            required
-          />
+          <div class="search-input-wrap">
+            <input
+              id="address-search-input"
+              type="text"
+              placeholder="Search address (e.g. 123 Prince St)"
+              aria-label="Address search"
+              aria-autocomplete="list"
+              aria-controls="address-search-suggestions"
+              required
+            />
+            <div
+              id="address-search-suggestions"
+              class="search-suggestions hidden"
+              role="listbox"
+              aria-label="Address suggestions"
+            ></div>
+          </div>
           <button type="submit">Search</button>
         </form>
       </header>

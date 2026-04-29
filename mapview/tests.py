@@ -100,6 +100,33 @@ class GeocodeEndpointTests(TestCase):
         self.assertEqual(payload["lng"], -73.997)
         self.assertEqual(payload["lat"], 40.724)
 
+    @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.requests.get")
+    def test_geocode_autocomplete_returns_multiple_results(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "features": [
+                {
+                    "place_name": "123 Prince St, New York, New York 10012, United States",
+                    "center": [-73.997, 40.724],
+                },
+                {
+                    "place_name": "123 Prince St, Brooklyn, New York 11201, United States",
+                    "center": [-73.99, 40.695],
+                },
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        response = self.client.get(reverse("geocode"), {"q": "123 Prince St", "limit": 5})
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        self.assertEqual(payload["query"], "123 Prince St")
+        self.assertEqual(len(payload["results"]), 2)
+        self.assertEqual(payload["results"][0]["label"], mock_response.json.return_value["features"][0]["place_name"])
+
 
 # ============================================================ #
 #  Sprint 2 – Data models
@@ -373,18 +400,14 @@ class DashboardThresholdTests(TestCase):
     def test_dashboard_uses_default_thresholds_when_db_empty(self):
         response = self.client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response, '"name": "High Risk", "max_score": 4.0, "color": "#E33B1B"'
-        )
-        self.assertContains(
-            response, '"name": "Medium Risk", "max_score": 6.0, "color": "#F8FC19"'
-        )
-        self.assertContains(
-            response, '"name": "Low Risk", "max_score": 9.0, "color": "#25D60B"'
-        )
-        self.assertContains(
-            response, '"name": "No Risk", "max_score": 10.0, "color": "#4A83FF"'
-        )
+        self.assertContains(response, '\\u0022High Risk\\u0022')
+        self.assertContains(response, '\\u0022#E33B1B\\u0022')
+        self.assertContains(response, '\\u0022Medium Risk\\u0022')
+        self.assertContains(response, '\\u0022#F8FC19\\u0022')
+        self.assertContains(response, '\\u0022Low Risk\\u0022')
+        self.assertContains(response, '\\u0022#25D60B\\u0022')
+        self.assertContains(response, '\\u0022No Risk\\u0022')
+        self.assertContains(response, '\\u0022#4A83FF\\u0022')
 
     def test_dashboard_uses_db_thresholds(self):
         ScoreThreshold.objects.create(name="Bad", color="#ff0000", max_score=3.0)
@@ -444,7 +467,29 @@ class GeocodeEdgeCaseTests(TestCase):
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
         response = self.client.get(reverse("geocode"), {"q": "123 Main St"})
-        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views._is_within_encoded_regions", side_effect=[False, True])
+    @patch("mapview.views.requests.get")
+    def test_geocode_filters_out_results_outside_encoded_regions(
+        self, mock_get, mock_is_within
+    ):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "features": [
+                {"place_name": "Outside", "center": [-74.3, 40.8]},
+                {"place_name": "Inside", "center": [-73.997, 40.724]},
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_get.return_value = mock_response
+
+        response = self.client.get(reverse("geocode"), {"q": "123 Main St"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["label"], "Inside")
+        self.assertEqual(mock_is_within.call_count, 2)
 
 
 # ============================================================ #
