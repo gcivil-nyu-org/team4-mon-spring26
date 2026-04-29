@@ -320,6 +320,52 @@ class CommunitiesTests(TestCase):
             Report.objects.filter(reported_user=self.verified_user).exists()
         )
 
+    def test_user_cannot_report_own_post(self):
+        self.client.login(username="verified_mn01", password="password123")
+        response = self.client.post(
+            reverse("communities:report_content", args=[self.nta.nta_code])
+            + f"?post_id={self.post.id}",
+            {"reason": "Spam post"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(
+            Report.objects.filter(post=self.post, reported_by=self.verified_user).exists()
+        )
+
+    def test_user_cannot_report_own_comment(self):
+        comment = Comment.objects.create(
+            post=self.post, author=self.verified_user, content="my own comment"
+        )
+        self.client.login(username="verified_mn01", password="password123")
+        response = self.client.post(
+            reverse("communities:report_content", args=[self.nta.nta_code])
+            + f"?comment_id={comment.id}",
+            {"reason": "Offensive comment"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
+        )
+        self.assertFalse(
+            Report.objects.filter(comment=comment, reported_by=self.verified_user).exists()
+        )
+
+    def test_author_view_hides_self_report_actions(self):
+        Comment.objects.create(
+            post=self.post, author=self.verified_user, content="my own comment"
+        )
+        self.client.login(username="verified_mn01", password="password123")
+        response = self.client.get(
+            reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, f"?post_id={self.post.id}")
+        self.assertNotContains(response, f"?user_id={self.verified_user.id}")
+        self.assertNotContains(response, "?comment_id=")
+
     def test_report_no_target_raises_403(self):
         """Report without post_id/comment_id/user_id returns 403."""
         self.client.login(username="public", password="password123")

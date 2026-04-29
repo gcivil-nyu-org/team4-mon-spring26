@@ -254,6 +254,18 @@ def report_content(request, nta_code):
             "Must provide post_id, comment_id, or user_id to report."
         )
 
+    if post and post.author == request.user:
+        messages.error(request, "You cannot report your own post.")
+        return redirect("communities:post_detail", nta_code=nta.nta_code, post_id=post.id)
+
+    if comment and comment.author == request.user:
+        messages.error(request, "You cannot report your own comment.")
+        return redirect(
+            "communities:post_detail",
+            nta_code=nta.nta_code,
+            post_id=comment.post.id,
+        )
+
     if request.method == "POST":
         form = ReportForm(request.POST)
         if form.is_valid():
