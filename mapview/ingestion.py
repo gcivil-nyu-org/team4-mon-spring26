@@ -56,6 +56,10 @@ def is_job_running():
 
 def run_ingestion_job(job_id):
     """Spawn a daemon thread to execute the ingestion job."""
+    if getattr(settings, "INGESTION_RUN_INLINE", False):
+        _execute_job(job_id)
+        return None
+
     t = threading.Thread(target=_execute_job, args=(job_id,), daemon=True)
     t.start()
     return t

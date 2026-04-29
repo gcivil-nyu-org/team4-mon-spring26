@@ -377,7 +377,9 @@ class CommunitiesTests(TestCase):
             reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
         )
         self.assertFalse(
-            Report.objects.filter(post=self.post, reported_by=self.verified_user).exists()
+            Report.objects.filter(
+                post=self.post, reported_by=self.verified_user
+            ).exists()
         )
 
     def test_user_cannot_report_own_comment(self):
@@ -395,7 +397,9 @@ class CommunitiesTests(TestCase):
             reverse("communities:post_detail", args=[self.nta.nta_code, self.post.id]),
         )
         self.assertFalse(
-            Report.objects.filter(comment=comment, reported_by=self.verified_user).exists()
+            Report.objects.filter(
+                comment=comment, reported_by=self.verified_user
+            ).exists()
         )
 
     def test_author_view_hides_self_report_actions(self):
@@ -851,7 +855,8 @@ class EditDeletePostTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Edit")
         self.assertContains(response, "Delete")
-        self.assertContains(response, "Report")
+        self.assertNotContains(response, f"?post_id={self.post.id}")
+        self.assertNotContains(response, f"?user_id={self.author.id}")
         self.assertContains(response, self.post.title)
 
 

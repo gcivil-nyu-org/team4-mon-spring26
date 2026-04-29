@@ -275,7 +275,9 @@ def report_content(request, nta_code):
 
     if post and post.author == request.user:
         messages.error(request, "You cannot report your own post.")
-        return redirect("communities:post_detail", nta_code=nta.nta_code, post_id=post.id)
+        return redirect(
+            "communities:post_detail", nta_code=nta.nta_code, post_id=post.id
+        )
 
     if comment and comment.author == request.user:
         messages.error(request, "You cannot report your own comment.")
