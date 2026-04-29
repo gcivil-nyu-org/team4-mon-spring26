@@ -1,0 +1,69 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - deploy
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install black flake8 coveralls
+    
+    - name: Run Black (code formatting check)
+      run: black --check .
+    
+    - name: Run Flake8 (linting)
+      run: flake8 .
+    
+    - name: Run tests with coverage
+      env:
+        DJANGO_SECRET_KEY: "github-actions-testing-key-12345"
+        DEBUG: "True"
+        ALLOWED_HOSTS: "*"
+        DB_SSL_REQUIRE: "False"
+      run: |
+        coverage run --source=accounts,mapview,communities manage.py test
+    
+    - name: Upload coverage to Coveralls
+      if: success()
+      env:
+        COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+      run: coveralls
+      continue-on-error: true
+    
+    - name: Generate deployment package
+      run: |
+        zip -r deploy.zip . -x '*.git*' '*__pycache__*' '*.pyc' 'venv/*' '.venv/*'
+    
+    - name: Get timestamp for version label
+      id: timestamp
+      run: echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_OUTPUT
+    
+    - name: Deploy to Elastic Beanstalk
+      uses: einaregilsson/beanstalk-deploy@v22
+      with:
+        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        application_name: ${{ secrets.AWS_EB_APP }}
+        environment_name: ${{ secrets.AWS_EB_ENV }}
+        version_label: "github-${{ github.sha }}-${{ steps.timestamp.outputs.timestamp }}"
+        region: us-east-1
+        deployment_package: deploy.zip
+        wait_for_deployment: true
+        wait_for_environment_recovery: 120
