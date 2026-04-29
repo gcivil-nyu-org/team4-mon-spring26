@@ -48,13 +48,11 @@ class RegistrationForm(UserCreationForm):
         self.fields["username"].widget.attrs["placeholder"] = "Username"
         self.fields["username"].error_messages["required"] = "Username is required."
         self.fields["password1"].widget.attrs["placeholder"] = "Password"
-        self.fields["password1"].error_messages["required"] = (
-            "Password is required."
-        )
+        self.fields["password1"].error_messages["required"] = "Password is required."
         self.fields["password2"].widget.attrs["placeholder"] = "Confirm password"
-        self.fields["password2"].error_messages["required"] = (
-            "Password confirmation is required."
-        )
+        self.fields["password2"].error_messages[
+            "required"
+        ] = "Password confirmation is required."
 
 
 class ProfileForm(forms.ModelForm):
@@ -97,9 +95,7 @@ class ProfileForm(forms.ModelForm):
         if not phone_number:
             return phone_number
         if not phone_number.isdigit() or len(phone_number) != 10:
-            raise forms.ValidationError(
-                "Phone number must contain exactly 10 digits."
-            )
+            raise forms.ValidationError("Phone number must contain exactly 10 digits.")
         return phone_number
 
 

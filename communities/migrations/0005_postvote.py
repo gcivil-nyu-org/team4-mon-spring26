@@ -27,9 +27,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "value",
-                    models.SmallIntegerField(
-                        choices=[(1, "Upvote"), (-1, "Downvote")]
-                    ),
+                    models.SmallIntegerField(choices=[(1, "Upvote"), (-1, "Downvote")]),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
