@@ -14,23 +14,27 @@
     </div>
 
     <div class="post-detail-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-        <h2>
+      <div class="post-detail-header">
+        <h2 class="post-detail-title">
           {% if post.is_pinned %}<span class="pinned-badge">Pinned</span>{% endif %}
           {{ post.title }}
         </h2>
-        <div style="display:flex;gap:0.4rem;align-items:center;">
+        <div class="post-action-group">
           {% if request.user == post.author or request.user.is_admin_user %}
             <a href="{% url 'communities:edit_post' nta.nta_code post.id %}" class="btn btn-sm" style="padding:0.2rem 0.5rem;font-size:0.78rem;">Edit</a>
             <a href="{% url 'communities:delete_post' nta.nta_code post.id %}" class="btn btn-sm" style="padding:0.2rem 0.5rem;font-size:0.78rem;color:#dc2626;border-color:#dc2626;">Delete</a>
           {% endif %}
-          <a href="{% url 'communities:report_content' nta.nta_code %}?post_id={{ post.id }}" class="btn-outline-danger" style="padding:0.2rem 0.5rem;font-size:0.78rem;border-radius:0.25rem;text-decoration:none;" title="Report Post">Report</a>
+          {% if request.user != post.author %}
+            <a href="{% url 'communities:report_content' nta.nta_code %}?post_id={{ post.id }}" class="btn-outline-danger" style="padding:0.2rem 0.5rem;font-size:0.78rem;border-radius:0.25rem;text-decoration:none;" title="Report Post">Report</a>
+          {% endif %}
         </div>
       </div>
 
       <div class="post-meta">
         Posted by <strong>{{ post.author.username }}</strong>
-        <a href="{% url 'communities:report_content' nta.nta_code %}?user_id={{ post.author.id }}" title="Report this User">Report User</a>
+        {% if request.user != post.author %}
+          <a href="{% url 'communities:report_content' nta.nta_code %}?user_id={{ post.author.id }}" title="Report this User">Report User</a>
+        {% endif %}
         {% if request.user.is_authenticated and request.user.is_verified_tenant and request.user != post.author %}
           <a href="{% url 'communities:chat' user_id=post.author.id %}" class="msg-link">Message</a>
         {% endif %}
@@ -39,6 +43,29 @@
         {% endif %}
         · <span class="category-badge">{{ post.get_category_display }}</span>
         <br><small>on {{ post.created_at|date:"F d, Y P" }}</small>
+      </div>
+
+      <div class="post-vote-panel">
+        <div class="post-vote-score">
+          <span class="post-vote-score-label">Community Score</span>
+          <strong>{{ post.vote_score_value }}</strong>
+        </div>
+        {% if can_post %}
+          <div class="post-vote-actions">
+            <form method="post" action="{% url 'communities:vote_post' nta.nta_code post.id %}">
+              {% csrf_token %}
+              <input type="hidden" name="value" value="1">
+              <button type="submit" class="btn btn-sm vote-btn {% if post.current_user_vote == 1 %}vote-btn-active{% endif %}">Upvote</button>
+            </form>
+            <form method="post" action="{% url 'communities:vote_post' nta.nta_code post.id %}">
+              {% csrf_token %}
+              <input type="hidden" name="value" value="-1">
+              <button type="submit" class="btn btn-sm vote-btn vote-btn-down {% if post.current_user_vote == -1 %}vote-btn-active{% endif %}">Downvote</button>
+            </form>
+          </div>
+        {% else %}
+          <p class="post-vote-hint">Only verified residents of {{ nta.nta_name }} can vote on posts.</p>
+        {% endif %}
       </div>
 
       {% if post.linked_address %}
@@ -58,12 +85,14 @@
 
     <h3 style="font-size:1rem;margin-bottom:0.75rem;">Replies ({{ comments.count }})</h3>
 
-    {% for comment in comments %}
+      {% for comment in comments %}
       <div class="comment-card">
         <div class="comment-meta">
           <span>
             <strong>{{ comment.author.username }}</strong>
-            <a href="{% url 'communities:report_content' nta.nta_code %}?user_id={{ comment.author.id }}" title="Report this User">Report User</a>
+            {% if request.user != comment.author %}
+              <a href="{% url 'communities:report_content' nta.nta_code %}?user_id={{ comment.author.id }}" title="Report this User">Report User</a>
+            {% endif %}
             {% if request.user.is_authenticated and request.user.is_verified_tenant and request.user != comment.author %}
               <a href="{% url 'communities:chat' user_id=comment.author.id %}" style="color:#2563eb;">Message</a>
             {% endif %}
@@ -72,7 +101,9 @@
             {% endif %}
             · {{ comment.created_at|timesince }} ago
           </span>
-          <a href="{% url 'communities:report_content' nta.nta_code %}?comment_id={{ comment.id }}">Report</a>
+          {% if request.user != comment.author %}
+            <a href="{% url 'communities:report_content' nta.nta_code %}?comment_id={{ comment.id }}">Report</a>
+          {% endif %}
         </div>
         <div class="comment-body">{{ comment.content }}</div>
       </div>
@@ -82,7 +113,7 @@
 
     <div class="reply-section">
       <h3>Leave a Reply</h3>
-      {% if can_post %}
+      {% if can_comment %}
         <form method="POST">
           {% csrf_token %}
           <div class="form-group" style="margin-bottom:0.75rem;">
