@@ -1637,3 +1637,79 @@ class DateParsingTests(TestCase):
 
         result = _parse_datetime("not-a-datetime")
         self.assertIsNone(result)
+
+
+# Lightweight tests for coverage
+class HealthCheckViewTests(TestCase):
+    """Simple tests for health check endpoint."""
+
+    def test_health_check_returns_200(self):
+        """Health endpoint returns 200 OK."""
+        resp = self.client.get(reverse("health-check"))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_health_check_json_response(self):
+        """Health endpoint returns JSON with status."""
+        resp = self.client.get(reverse("health-check"))
+        data = resp.json()
+        self.assertEqual(data["status"], "healthy")
+
+
+class StopStuckJobsCommandTests(TestCase):
+    """Lightweight tests for stop_stuck_jobs command."""
+
+    def test_no_stuck_jobs(self):
+        """Command handles no stuck jobs gracefully."""
+        from io import StringIO
+
+        out = StringIO()
+        call_command("stop_stuck_jobs", "--hours=24", stdout=out)
+        self.assertIn("No jobs", out.getvalue())
+
+    def test_dry_run_mode(self):
+        """Dry run mode doesn't modify jobs."""
+        from io import StringIO
+
+        job = IngestionJob.objects.create(
+            trigger_type="manual",
+            sources=IngestionJob.SOURCE_HPD,
+            requested_limit=100,
+            status=IngestionJob.STATUS_RUNNING,
+            started_at=timezone.now() - timedelta(hours=48),
+        )
+        out = StringIO()
+        call_command("stop_stuck_jobs", "--hours=24", "--dry-run", stdout=out)
+        job.refresh_from_db()
+        self.assertEqual(job.status, IngestionJob.STATUS_RUNNING)
+
+
+class UtilityFunctionTests(TestCase):
+    """Lightweight tests for utility functions."""
+
+    def test_calculate_risk_score_zero_weighted(self):
+        """Risk score calculation with zero weighted score."""
+        from mapview.utils import calculate_risk_score
+
+        score = calculate_risk_score(0)
+        self.assertEqual(score, 10.0)
+
+    def test_build_risk_summary_high_risk(self):
+        """Risk summary for high-risk area."""
+        from mapview.utils import build_risk_summary
+
+        summary = build_risk_summary(2.5, 100, 50)
+        self.assertIn("High-risk", summary)
+
+    def test_build_risk_summary_moderate_risk(self):
+        """Risk summary for moderate-risk area."""
+        from mapview.utils import build_risk_summary
+
+        summary = build_risk_summary(5.0, 50, 25)
+        self.assertIn("Moderate-risk", summary)
+
+    def test_build_risk_summary_low_risk(self):
+        """Risk summary for low-risk area."""
+        from mapview.utils import build_risk_summary
+
+        summary = build_risk_summary(8.0, 10, 5)
+        self.assertIn("Lower-risk", summary)
