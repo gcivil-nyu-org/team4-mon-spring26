@@ -1713,3 +1713,51 @@ class UtilityFunctionTests(TestCase):
 
         summary = build_risk_summary(8.0, 10, 5)
         self.assertIn("Lower-risk", summary)
+
+
+class MapCommunityViewTests(TestCase):
+    """Lightweight tests for map-community integration views."""
+
+    def test_community_preview_nta_not_found(self):
+        """Community preview returns 404 for invalid NTA."""
+        resp = self.client.get(reverse("map-community-preview", args=["INVALID"]))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_community_preview_no_community(self):
+        """Community preview handles NTA without community."""
+        nta = NTARiskScore.objects.create(
+            nta_code="TEST01",
+            nta_name="Test Area",
+            risk_score=5.0,
+        )
+        resp = self.client.get(reverse("map-community-preview", args=["TEST01"]))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data["has_community"])
+        self.assertEqual(data["member_count"], 0)
+
+    def test_recency_label_view(self):
+        """Recency label view returns label text."""
+        resp = self.client.get(reverse("map-recency-label"))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("label", data)
+
+
+class SubscriptionViewTests(TestCase):
+    """Lightweight tests for subscription views."""
+
+    def test_subscription_list_requires_auth(self):
+        """Subscription list requires authentication."""
+        resp = self.client.get(reverse("subscription-list"))
+        self.assertEqual(resp.status_code, 401)
+
+    def test_subscription_create_requires_auth(self):
+        """Subscription create requires authentication."""
+        resp = self.client.post(reverse("subscription-create"))
+        self.assertEqual(resp.status_code, 401)
+
+    def test_notification_list_requires_auth(self):
+        """Notification list requires authentication."""
+        resp = self.client.get(reverse("notification-list"))
+        self.assertEqual(resp.status_code, 401)
