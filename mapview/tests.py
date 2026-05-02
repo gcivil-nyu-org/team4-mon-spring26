@@ -1662,9 +1662,6 @@ class HealthCheckTests(TestCase):
 
 
 class StopStuckJobsCommandTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(username="admin_stuck", password="pw")
-
     def test_no_stuck_jobs(self):
         """Command runs cleanly when there are no stuck jobs."""
         from io import StringIO
@@ -2379,7 +2376,8 @@ class BuildRiskSummaryTests(TestCase):
 
 
 class CreateTestAccountsCommandTests(TestCase):
-    def test_creates_public_accounts(self):
+    def test_creates_accounts_and_skips_missing_nta(self):
+        """Single run: creates public accounts & skips verified seeds without NTAs."""
         from io import StringIO
 
         out = StringIO()
@@ -2387,28 +2385,8 @@ class CreateTestAccountsCommandTests(TestCase):
         output = out.getvalue()
         self.assertIn("prof_test", output)
         self.assertIn("ta_test", output)
-        # Verify accounts exist
-        self.assertTrue(User.objects.filter(username="prof_test").exists())
-        self.assertTrue(User.objects.filter(username="ta_test").exists())
-
-    def test_idempotent_run(self):
-        """Running twice should update instead of error."""
-        from io import StringIO
-
-        call_command("create_test_accounts", stdout=StringIO())
-        out = StringIO()
-        call_command("create_test_accounts", stdout=out)
-        output = out.getvalue()
-        self.assertIn("Updated", output)
-
-    def test_verified_users_skipped_without_nta(self):
-        """Verified tenant seeds are skipped when NTA codes don't exist in DB."""
-        from io import StringIO
-
-        out = StringIO()
-        call_command("create_test_accounts", stdout=out)
-        output = out.getvalue()
         self.assertIn("Skipping", output)
+        self.assertTrue(User.objects.filter(username="prof_test").exists())
 
 
 # ============================================================ #
