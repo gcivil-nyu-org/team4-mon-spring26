@@ -59,21 +59,33 @@ def calculate_risk_score(
 ):
     """Convert weighted issue counts into a 0-10 score where 10 is safest.
 
-    Scores are calibrated against the current recompute window so they preserve
-    spread across neighborhoods instead of collapsing toward one color bucket.
+    Scores mostly use an absolute log scale so dense neighborhoods are not
+    punished just because they are the highest-volume NTA in the current run.
+    A smaller relative component keeps some contrast across the map.
     """
     if weighted_issue_count <= 0:
         return 10.0
 
+    absolute_weight = 0.7
+    relative_weight = 0.3
+    absolute_multiplier = 0.7
+
     log_weight = math.log1p(weighted_issue_count)
+    absolute_score = max(0.0, min(10.0, 10.0 - log_weight * absolute_multiplier))
+
     if min_log_weight is None or max_log_weight is None:
-        return round(max(0.0, min(10.0, 10.0 - log_weight * 1.2)), 1)
+        return round(absolute_score, 1)
 
     if math.isclose(min_log_weight, max_log_weight):
-        return 5.0
+        relative_score = 5.0
+    else:
+        normalized = (log_weight - min_log_weight) / (max_log_weight - min_log_weight)
+        relative_score = max(0.0, min(10.0, 10.0 * (1.0 - normalized)))
 
-    normalized = (log_weight - min_log_weight) / (max_log_weight - min_log_weight)
-    return round(max(0.0, min(10.0, 10.0 * (1.0 - normalized))), 1)
+    blended_score = (absolute_score * absolute_weight) + (
+        relative_score * relative_weight
+    )
+    return round(max(0.0, min(10.0, blended_score)), 1)
 
 
 def build_risk_summary(risk_score, total_violations, total_complaints):
