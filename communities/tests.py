@@ -196,6 +196,17 @@ class CommunitiesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Marble Hill-Inwood")
 
+    def test_forum_index_search_with_no_matches_shows_no_results(self):
+        Community.objects.create(nta=self.nta, name="Marble Hill-Inwood")
+        Community.objects.create(nta=self.nta2, name="Greenpoint")
+
+        response = self.client.get(reverse("communities:index"), {"q": "Astoria"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Marble Hill-Inwood")
+        self.assertNotContains(response, "Greenpoint")
+        self.assertContains(response, "No communities match your search.")
+
     def test_nta_forum_read_access(self):
         """Any user can view an NTA forum."""
         response = self.client.get(

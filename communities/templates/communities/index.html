@@ -57,6 +57,7 @@
             <option value="highest_risk" {% if sort == 'highest_risk' %}selected{% endif %}>Highest Risk</option>
           </select>
           <button type="submit" class="btn btn-sm btn-primary" style="padding:0.35rem 0.7rem;">Go</button>
+          <a href="{% url 'communities:index' %}" class="btn btn-sm btn-secondary" style="padding:0.35rem 0.7rem;">Reset Filters</a>
         </form>
       </div>
     </div>
