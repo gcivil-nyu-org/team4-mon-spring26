@@ -942,10 +942,10 @@ class ScoreRecencyConfigModelTests(TestCase):
 
 
 class RiskScoreUtilityTests(TestCase):
-    def test_calibrated_score_uses_full_scale(self):
+    def test_calibrated_score_keeps_relative_signal_without_forcing_zero(self):
         self.assertEqual(calculate_risk_score(0, 0.0, 3.0), 10.0)
-        self.assertEqual(calculate_risk_score(1, 0.0, math.log1p(100)), 8.5)
-        self.assertEqual(calculate_risk_score(100, 0.0, math.log1p(100)), 0.0)
+        self.assertEqual(calculate_risk_score(1, 0.0, math.log1p(100)), 9.2)
+        self.assertEqual(calculate_risk_score(100, 0.0, math.log1p(100)), 4.7)
 
 
 # ============================================================ #
@@ -2377,11 +2377,11 @@ class CalculateRiskScoreTests(TestCase):
 
     def test_high_issues_low_score(self):
         score = calculate_risk_score(10000)
-        self.assertLess(score, 3.0)
+        self.assertLess(score, 4.0)
 
     def test_with_min_max_equal(self):
         score = calculate_risk_score(50, min_log_weight=3.0, max_log_weight=3.0)
-        self.assertEqual(score, 5.0)
+        self.assertEqual(score, 6.6)
 
     def test_with_min_max_range(self):
         score = calculate_risk_score(50, min_log_weight=0.0, max_log_weight=10.0)
