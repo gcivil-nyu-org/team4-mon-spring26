@@ -95,8 +95,9 @@ def forum_index(request):
             except Community.DoesNotExist:
                 pass
 
-    # Fallback: if no communities exist yet, show NTAs directly
-    if not communities.exists():
+    # Fallback: if no communities exist yet, show NTAs directly on the default browse view.
+    # When a search has no matches, keep the result set empty instead of showing all NTAs.
+    if not search and not communities.exists():
         ntas = NTARiskScore.objects.all().order_by("nta_name")
     else:
         ntas = None
