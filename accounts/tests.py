@@ -1,6 +1,7 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from unittest.mock import patch
 
 from .models import User, VerificationRequest
 
@@ -456,6 +457,46 @@ class RequestVerificationViewTests(TestCase):
         self.user = User.objects.create_user(
             username="tenant1", password="StrongPass99!"
         )
+        self.resolve_patcher = patch(
+            "accounts.forms.resolve_verification_address",
+            side_effect=self.fake_resolve_verification_address,
+        )
+        self.resolve_patcher.start()
+
+    def tearDown(self):
+        self.resolve_patcher.stop()
+
+    def fake_resolve_verification_address(self, address):
+        if "invalid" in address.lower():
+            return None
+        return {
+            "label": f"{address}, Manhattan, NY 10001",
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+            "nta_code": "MN01",
+            "borough": "MANHATTAN",
+            "zip_code": "10001",
+        }
+
+    def build_verified_payload(
+        self,
+        address,
+        document_type,
+        document_description="",
+        **extra,
+    ):
+        resolved = self.fake_resolve_verification_address(address)
+        payload = {
+            "address": address,
+            "document_type": document_type,
+            "document_description": document_description,
+            "verified_address": resolved["label"],
+            "verified_latitude": resolved["latitude"],
+            "verified_longitude": resolved["longitude"],
+            "verified_nta_code": resolved["nta_code"],
+        }
+        payload.update(extra)
+        return payload
 
     def test_requires_login(self):
         response = self.client.get(reverse("request-verification"))
@@ -472,19 +513,18 @@ class RequestVerificationViewTests(TestCase):
         self.client.login(username="tenant1", password="StrongPass99!")
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "123 Main St, Apt 4B",
-                "borough": "MANHATTAN",
-                "zip_code": "10001",
-                "document_type": "lease",
-                "document_description": "Lease agreement dated Jan 2026",
-            },
+            self.build_verified_payload(
+                "123 Main St, Apt 4B",
+                "lease",
+                "Lease agreement dated Jan 2026",
+            ),
         )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(VerificationRequest.objects.filter(user=self.user).exists())
         vr = VerificationRequest.objects.get(user=self.user)
         self.assertEqual(vr.status, VerificationRequest.STATUS_PENDING)
-        self.assertEqual(vr.address, "123 Main St, Apt 4B")
+        self.assertEqual(vr.address, "123 Main St, Apt 4B, Manhattan, NY 10001")
+        self.assertEqual(vr.nta_code, "MN01")
 
     def test_already_verified_redirects(self):
         self.user.role = User.ROLE_VERIFIED_TENANT
@@ -503,13 +543,11 @@ class RequestVerificationViewTests(TestCase):
         )
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "New address",
-                "borough": "BROOKLYN",
-                "zip_code": "11201",
-                "document_type": "utility_bill",
-                "document_description": "ConEd bill",
-            },
+            self.build_verified_payload(
+                "New address",
+                "utility_bill",
+                "ConEd bill",
+            ),
         )
         self.assertEqual(response.status_code, 200)  # re-renders with error
         self.assertEqual(VerificationRequest.objects.filter(user=self.user).count(), 1)
@@ -524,13 +562,11 @@ class RequestVerificationViewTests(TestCase):
         )
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "New address",
-                "borough": "QUEENS",
-                "zip_code": "11375",
-                "document_type": "bank_statement",
-                "document_description": "Chase statement",
-            },
+            self.build_verified_payload(
+                "New address",
+                "bank_statement",
+                "Chase statement",
+            ),
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(VerificationRequest.objects.filter(user=self.user).count(), 2)
@@ -548,18 +584,17 @@ class RequestVerificationViewTests(TestCase):
         )
         response = self.client.post(
             reverse("edit-verification", args=[vr.pk]),
-            {
-                "address": "Updated address",
-                "borough": "BROOKLYN",
-                "zip_code": "11201",
-                "document_type": "utility_bill",
-                "document_description": "Updated details",
-            },
+            self.build_verified_payload(
+                "Updated address",
+                "utility_bill",
+                "Updated details",
+            ),
         )
         self.assertEqual(response.status_code, 302)
         vr.refresh_from_db()
-        self.assertEqual(vr.address, "Updated address")
-        self.assertEqual(vr.borough, "BROOKLYN")
+        self.assertEqual(vr.address, "Updated address, Manhattan, NY 10001")
+        self.assertEqual(vr.borough, "MANHATTAN")
+        self.assertEqual(vr.zip_code, "10001")
         self.assertEqual(vr.document_type, "utility_bill")
         self.assertEqual(vr.status, VerificationRequest.STATUS_PENDING)
 
@@ -597,13 +632,11 @@ class RequestVerificationViewTests(TestCase):
         )
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "New address",
-                "borough": "QUEENS",
-                "zip_code": "11375",
-                "document_type": "bank_statement",
-                "document_description": "Chase statement",
-            },
+            self.build_verified_payload(
+                "New address",
+                "bank_statement",
+                "Chase statement",
+            ),
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(VerificationRequest.objects.filter(user=self.user).count(), 2)
@@ -618,14 +651,12 @@ class RequestVerificationViewTests(TestCase):
         )
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "500 Broadway",
-                "borough": "MANHATTAN",
-                "zip_code": "10012",
-                "document_type": "lease",
-                "document_description": "Lease dated Jan 2026",
-                "document": doc,
-            },
+            self.build_verified_payload(
+                "500 Broadway",
+                "lease",
+                "Lease dated Jan 2026",
+                document=doc,
+            ),
         )
         self.assertEqual(response.status_code, 302)
         vr = VerificationRequest.objects.get(user=self.user)
@@ -636,13 +667,11 @@ class RequestVerificationViewTests(TestCase):
         self.client.login(username="tenant1", password="StrongPass99!")
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "600 Broadway",
-                "borough": "MANHATTAN",
-                "zip_code": "10012",
-                "document_type": "utility_bill",
-                "document_description": "ConEd bill",
-            },
+            self.build_verified_payload(
+                "600 Broadway",
+                "utility_bill",
+                "ConEd bill",
+            ),
         )
         self.assertEqual(response.status_code, 302)
         vr = VerificationRequest.objects.get(user=self.user)
@@ -657,17 +686,51 @@ class RequestVerificationViewTests(TestCase):
         )
         response = self.client.post(
             reverse("request-verification"),
-            {
-                "address": "700 Broadway",
-                "borough": "MANHATTAN",
-                "zip_code": "10012",
-                "document_type": "lease",
-                "document": bad_file,
-            },
+            self.build_verified_payload(
+                "700 Broadway",
+                "lease",
+                document=bad_file,
+            ),
         )
         self.assertEqual(response.status_code, 200)  # re-renders with error
         self.assertFalse(VerificationRequest.objects.filter(user=self.user).exists())
         self.assertContains(response, "Unsupported file type")
+
+    def test_rejects_unverified_submission(self):
+        self.client.login(username="tenant1", password="StrongPass99!")
+        response = self.client.post(
+            reverse("request-verification"),
+            {
+                "address": "123 Main St",
+                "document_type": "lease",
+                "document_description": "Lease agreement",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Please verify and select your address from the suggested match before submitting.",
+        )
+
+    def test_rejects_address_outside_mapped_nta(self):
+        self.client.login(username="tenant1", password="StrongPass99!")
+        response = self.client.post(
+            reverse("request-verification"),
+            {
+                "address": "Invalid Place",
+                "document_type": "lease",
+                "document_description": "Lease agreement",
+                "verified_address": "Invalid Place, Manhattan, NY 10001",
+                "verified_latitude": 40.7128,
+                "verified_longitude": -74.0060,
+                "verified_nta_code": "MN01",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Enter a valid NYC address within a mapped NTA before submitting.",
+        )
 
 
 class VerificationStatusViewTests(TestCase):

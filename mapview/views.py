@@ -18,6 +18,7 @@ from .models import (
     ScoreRecencyConfig,
     ScoreThreshold,
 )
+from .utils import get_nta_code_from_coordinates
 
 
 def _is_admin(user):
@@ -215,8 +216,28 @@ def geocode_view(request):
         if len(center) != 2:
             continue
         lng, lat = center
-        if _is_within_encoded_regions(lng, lat):
-            features.append(feature)
+        if not _is_within_encoded_regions(lng, lat):
+            continue
+
+        nta_code = None
+        nta_name = None
+        try:
+            nta_code = get_nta_code_from_coordinates(lat, lng)
+        except Exception:
+            nta_code = None
+
+        if not nta_code:
+            continue
+
+        nta_name = (
+            NTARiskScore.objects.filter(nta_code=nta_code)
+            .values_list("nta_name", flat=True)
+            .first()
+        )
+
+        feature["_resolved_nta_code"] = nta_code
+        feature["_resolved_nta_name"] = nta_name
+        features.append(feature)
 
     if not features:
         return JsonResponse(
@@ -233,6 +254,8 @@ def geocode_view(request):
                         "label": feature.get("place_name", query),
                         "lng": feature["center"][0],
                         "lat": feature["center"][1],
+                        "nta_code": feature.get("_resolved_nta_code") or "",
+                        "nta_name": feature.get("_resolved_nta_name") or "",
                     }
                     for feature in features
                 ],
@@ -250,6 +273,8 @@ def geocode_view(request):
             "label": top.get("place_name", query),
             "lng": center[0],
             "lat": center[1],
+            "nta_code": top.get("_resolved_nta_code") or "",
+            "nta_name": top.get("_resolved_nta_name") or "",
         }
     )
 

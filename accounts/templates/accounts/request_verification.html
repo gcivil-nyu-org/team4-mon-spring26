@@ -39,24 +39,23 @@
 
     <form method="post" enctype="multipart/form-data" novalidate>
       {% csrf_token %}
+      {{ form.verified_address }}
+      {{ form.verified_latitude }}
+      {{ form.verified_longitude }}
+      {{ form.verified_nta_code }}
 
       <div class="form-group">
         <label for="id_address">Full Address *</label>
         {{ form.address }}
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;align-items:center;">
+          <button type="button" class="btn btn-secondary" id="verify-address-btn">Verify Address</button>
+          <span id="address-verification-status" class="field-hint">Confirm a suggested NYC address before submitting.</span>
+        </div>
+        <div id="address-suggestions" style="display:none;margin-top:0.75rem;"></div>
+        <span class="field-hint">We’ll fill in borough and ZIP automatically from the matched address.</span>
         {% if form.address.errors %}
           <span class="field-error">{{ form.address.errors.0 }}</span>
         {% endif %}
-      </div>
-
-      <div style="display:flex;gap:0.75rem;">
-        <div class="form-group" style="flex:2;">
-          <label for="id_borough">Borough *</label>
-          {{ form.borough }}
-        </div>
-        <div class="form-group" style="flex:1;">
-          <label for="id_zip_code">ZIP Code</label>
-          {{ form.zip_code }}
-        </div>
       </div>
 
       <div class="form-group">
@@ -89,4 +88,123 @@
     </p>
   </div>
 </div>
+
+<script>
+  (() => {
+    const form = document.querySelector('form[method="post"]');
+    if (!form) return;
+
+    const addressInput = document.getElementById('id_address');
+    const verifiedAddressInput = document.getElementById('id_verified_address');
+    const verifiedLatInput = document.getElementById('id_verified_latitude');
+    const verifiedLngInput = document.getElementById('id_verified_longitude');
+    const verifiedNtaInput = document.getElementById('id_verified_nta_code');
+    const verifyButton = document.getElementById('verify-address-btn');
+    const statusEl = document.getElementById('address-verification-status');
+    const suggestionsEl = document.getElementById('address-suggestions');
+    const geocodeUrl = "{% url 'geocode' %}";
+
+    const clearVerifiedState = () => {
+      verifiedAddressInput.value = '';
+      verifiedLatInput.value = '';
+      verifiedLngInput.value = '';
+      verifiedNtaInput.value = '';
+    };
+
+    const markNeedsVerification = (message) => {
+      clearVerifiedState();
+      statusEl.textContent = message || 'Confirm a suggested NYC address before submitting.';
+      statusEl.className = 'field-hint';
+    };
+
+    const markVerified = (result) => {
+      addressInput.value = result.label;
+      verifiedAddressInput.value = result.label;
+      verifiedLatInput.value = result.lat;
+      verifiedLngInput.value = result.lng;
+      verifiedNtaInput.value = result.nta_code || '';
+      statusEl.textContent = `Verified: ${result.label}${result.nta_name ? ` (${result.nta_name})` : ''}`;
+      statusEl.className = 'field-hint';
+      suggestionsEl.style.display = 'none';
+      suggestionsEl.innerHTML = '';
+    };
+
+    const renderSuggestions = (results) => {
+      if (!results.length) {
+        suggestionsEl.style.display = 'none';
+        suggestionsEl.innerHTML = '';
+        return;
+      }
+
+      suggestionsEl.innerHTML = results.map((result, index) => `
+        <button type="button" class="btn btn-secondary address-suggestion" data-index="${index}" style="display:block;width:100%;text-align:left;margin-bottom:0.5rem;">
+          ${result.label}
+        </button>
+      `).join('');
+      suggestionsEl.style.display = 'block';
+
+      suggestionsEl.querySelectorAll('.address-suggestion').forEach((button) => {
+        button.addEventListener('click', () => {
+          const result = results[Number(button.dataset.index)];
+          markVerified(result);
+        });
+      });
+    };
+
+    const buildQuery = () => {
+      return addressInput.value.trim();
+    };
+
+    addressInput.addEventListener('input', () => markNeedsVerification('Address changed. Please verify it again.'));
+    addressInput.addEventListener('change', () => markNeedsVerification('Address changed. Please verify it again.'));
+
+    verifyButton.addEventListener('click', async () => {
+      const query = buildQuery();
+      if (query.length < 3) {
+        statusEl.textContent = 'Enter more of the address before verifying.';
+        statusEl.className = 'field-error';
+        return;
+      }
+
+      verifyButton.disabled = true;
+      statusEl.textContent = 'Looking up address matches...';
+      statusEl.className = 'field-hint';
+
+      try {
+        const response = await fetch(`${geocodeUrl}?q=${encodeURIComponent(query)}&limit=5`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const payload = await response.json();
+
+        if (!response.ok || !payload.results || !payload.results.length) {
+          throw new Error(payload.error || 'No matching address found.');
+        }
+
+        renderSuggestions(payload.results);
+        statusEl.textContent = 'Pick the correct address match to continue.';
+        statusEl.className = 'field-hint';
+      } catch (error) {
+        clearVerifiedState();
+        suggestionsEl.style.display = 'none';
+        suggestionsEl.innerHTML = '';
+        statusEl.textContent = error.message || 'Address verification failed.';
+        statusEl.className = 'field-error';
+      } finally {
+        verifyButton.disabled = false;
+      }
+    });
+
+    form.addEventListener('submit', (event) => {
+      if (!verifiedAddressInput.value || !verifiedLatInput.value || !verifiedLngInput.value || !verifiedNtaInput.value) {
+        event.preventDefault();
+        statusEl.textContent = 'Verify and select your address before submitting.';
+        statusEl.className = 'field-error';
+      }
+    });
+
+    if (verifiedAddressInput.value && verifiedLatInput.value && verifiedLngInput.value && verifiedNtaInput.value) {
+      statusEl.textContent = `Verified: ${verifiedAddressInput.value}`;
+    }
+  })();
+</script>
 {% endblock %}

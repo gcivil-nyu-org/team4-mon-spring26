@@ -1,4 +1,5 @@
 import os
+import re
 
 from django import forms
 from django.conf import settings
@@ -8,9 +9,79 @@ from urllib.parse import quote
 
 from .models import User, VerificationRequest
 from mapview.utils import get_nta_code_from_coordinates
+from mapview.models import NTARiskScore
 
 ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 MAX_DOCUMENT_SIZE_MB = 10
+
+
+def _extract_mapbox_context(feature):
+    """Extract borough and ZIP code from a Mapbox feature when available."""
+    zip_code = ""
+
+    for item in feature.get("context", []):
+        item_id = item.get("id", "")
+        text = (item.get("text") or "").strip()
+        if item_id.startswith("postcode.") and text:
+            zip_code = text
+
+    if not zip_code:
+        match = re.search(r"\b(\d{5})\b", feature.get("place_name", ""))
+        if match:
+            zip_code = match.group(1)
+
+    return zip_code
+
+
+def resolve_verification_address(address):
+    """Resolve an address to a canonical label, coordinates, borough, ZIP, and NTA code."""
+    if not address or not settings.MAPBOX_ACCESS_TOKEN:
+        return None
+
+    encoded_query = quote(address.strip(), safe="")
+    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json"
+    params = {
+        "access_token": settings.MAPBOX_ACCESS_TOKEN,
+        "limit": 1,
+        "autocomplete": "true",
+        "types": "address,place",
+        "bbox": "-74.25559,40.49612,-73.70001,40.91553",
+    }
+
+    response = requests.get(url, params=params, timeout=8)
+    response.raise_for_status()
+    data = response.json()
+
+    features = data.get("features", [])
+    if not features:
+        return None
+
+    top = features[0]
+    center = top.get("center", [])
+    if len(center) != 2:
+        return None
+
+    lng, lat = center
+    nta_code = get_nta_code_from_coordinates(lat, lng)
+    if not nta_code:
+        return None
+
+    zip_code = _extract_mapbox_context(top)
+    borough = (
+        NTARiskScore.objects.filter(nta_code=nta_code)
+        .values_list("borough", flat=True)
+        .first()
+        or ""
+    ).upper()
+
+    return {
+        "label": top.get("place_name", address),
+        "latitude": lat,
+        "longitude": lng,
+        "nta_code": nta_code,
+        "borough": borough,
+        "zip_code": zip_code,
+    }
 
 
 class RegistrationForm(UserCreationForm):
@@ -102,15 +173,22 @@ class ProfileForm(forms.ModelForm):
 class VerificationRequestForm(forms.ModelForm):
     """Form for tenants to request building-level verification."""
 
+    verified_address = forms.CharField(required=False, widget=forms.HiddenInput())
+    verified_latitude = forms.FloatField(required=False, widget=forms.HiddenInput())
+    verified_longitude = forms.FloatField(required=False, widget=forms.HiddenInput())
+    verified_nta_code = forms.CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = VerificationRequest
         fields = [
             "address",
-            "borough",
-            "zip_code",
             "document_type",
             "document",
             "document_description",
+            "verified_address",
+            "verified_latitude",
+            "verified_longitude",
+            "verified_nta_code",
         ]
         widgets = {
             "address": forms.TextInput(
@@ -118,17 +196,6 @@ class VerificationRequestForm(forms.ModelForm):
                     "placeholder": "e.g. 123 Main St, Apt 4B, New York, NY 10001",
                 }
             ),
-            "borough": forms.Select(
-                choices=[
-                    ("", "Select borough"),
-                    ("MANHATTAN", "Manhattan"),
-                    ("BROOKLYN", "Brooklyn"),
-                    ("QUEENS", "Queens"),
-                    ("BRONX", "Bronx"),
-                    ("STATEN ISLAND", "Staten Island"),
-                ],
-            ),
-            "zip_code": forms.TextInput(attrs={"placeholder": "10001"}),
             "document_type": forms.Select(),
             "document": forms.ClearableFileInput(
                 attrs={
@@ -146,6 +213,12 @@ class VerificationRequestForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        self._resolved_address = None
+        if self.instance.pk and self.instance.latitude and self.instance.longitude:
+            self.fields["verified_address"].initial = self.instance.address
+            self.fields["verified_latitude"].initial = self.instance.latitude
+            self.fields["verified_longitude"].initial = self.instance.longitude
+            self.fields["verified_nta_code"].initial = self.instance.nta_code
 
     def clean_document(self):
         document = self.cleaned_data.get("document")
@@ -165,6 +238,7 @@ class VerificationRequestForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+
         if self.user:
             pending_requests = self.user.verification_requests.filter(
                 status=VerificationRequest.STATUS_PENDING
@@ -176,45 +250,64 @@ class VerificationRequestForm(forms.ModelForm):
                     "You already have a verification request pending review. "
                     "Please wait for it to be processed before submitting a new one."
                 )
+
+        address = (cleaned.get("address") or "").strip()
+        verified_address = (cleaned.get("verified_address") or "").strip()
+        verified_latitude = cleaned.get("verified_latitude")
+        verified_longitude = cleaned.get("verified_longitude")
+        verified_nta_code = (cleaned.get("verified_nta_code") or "").strip()
+
+        if address:
+            try:
+                resolved = resolve_verification_address(address)
+            except requests.RequestException:
+                raise forms.ValidationError(
+                    "We couldn't verify that address right now. Please try again in a moment."
+                )
+            except ValueError:
+                raise forms.ValidationError(
+                    "The address verification service returned invalid data. Please try again."
+                )
+
+            if not resolved:
+                raise forms.ValidationError(
+                    "Enter a valid NYC address within a mapped NTA before submitting."
+                )
+
+            if not (
+                verified_address
+                and verified_latitude is not None
+                and verified_longitude is not None
+                and verified_nta_code
+            ):
+                raise forms.ValidationError(
+                    "Please verify and select your address from the suggested match before submitting."
+                )
+
+            if (
+                verified_address != resolved["label"]
+                or float(verified_latitude) != resolved["latitude"]
+                or float(verified_longitude) != resolved["longitude"]
+                or verified_nta_code != resolved["nta_code"]
+            ):
+                raise forms.ValidationError(
+                    "Your address changed or no longer matches the verified selection. Please verify it again."
+                )
+
+            self._resolved_address = resolved
+
         return cleaned
 
     def save(self, commit=True):
         instance = super().save(commit=False)
 
-        # Geocode the address to get coordinates and NTA code
-        address = instance.address
-        if address and settings.MAPBOX_ACCESS_TOKEN:
-            try:
-                # Call Mapbox geocoding API
-                encoded_query = quote(address, safe="")
-                url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json"
-                params = {
-                    "access_token": settings.MAPBOX_ACCESS_TOKEN,
-                    "limit": 1,
-                    "types": "address,place",
-                    "bbox": "-74.25559,40.49612,-73.70001,40.91553",  # NYC bounds
-                }
-                response = requests.get(url, params=params, timeout=8)
-                response.raise_for_status()
-                data = response.json()
-
-                features = data.get("features", [])
-                if features:
-                    center = features[0].get("center", [])
-                    if len(center) == 2:
-                        instance.longitude = center[0]
-                        instance.latitude = center[1]
-
-                        # Get NTA code from coordinates
-                        nta_code = get_nta_code_from_coordinates(
-                            instance.latitude, instance.longitude
-                        )
-                        if nta_code:
-                            instance.nta_code = nta_code
-            except Exception:
-                # Geocoding failed, but don't block submission
-                # Admin can manually set NTA code during review
-                pass
+        if self._resolved_address:
+            instance.address = self._resolved_address["label"]
+            instance.latitude = self._resolved_address["latitude"]
+            instance.longitude = self._resolved_address["longitude"]
+            instance.nta_code = self._resolved_address["nta_code"]
+            instance.borough = self._resolved_address["borough"]
+            instance.zip_code = self._resolved_address["zip_code"]
 
         if commit:
             instance.save()

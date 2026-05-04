@@ -77,8 +77,17 @@ class GeocodeEndpointTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views.requests.get")
-    def test_geocode_success_contract(self, mock_get):
+    def test_geocode_success_contract(self, mock_get, mock_get_nta):
+        NTARiskScore.objects.create(
+            nta_code="MN01",
+            nta_name="Hudson Square",
+            borough="MANHATTAN",
+            risk_score=6.5,
+            total_violations=1,
+            total_complaints=1,
+        )
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "features": [
@@ -99,10 +108,23 @@ class GeocodeEndpointTests(TestCase):
         self.assertIn("label", payload)
         self.assertEqual(payload["lng"], -73.997)
         self.assertEqual(payload["lat"], 40.724)
+        self.assertEqual(payload["nta_code"], "MN01")
+        self.assertEqual(payload["nta_name"], "Hudson Square")
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views.requests.get")
-    def test_geocode_autocomplete_returns_multiple_results(self, mock_get):
+    def test_geocode_autocomplete_returns_multiple_results(
+        self, mock_get, mock_get_nta
+    ):
+        NTARiskScore.objects.create(
+            nta_code="MN01",
+            nta_name="Hudson Square",
+            borough="MANHATTAN",
+            risk_score=6.5,
+            total_violations=1,
+            total_complaints=1,
+        )
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "features": [
@@ -131,6 +153,7 @@ class GeocodeEndpointTests(TestCase):
             payload["results"][0]["label"],
             mock_response.json.return_value["features"][0]["place_name"],
         )
+        self.assertEqual(payload["results"][0]["nta_code"], "MN01")
 
 
 # ============================================================ #
@@ -434,8 +457,9 @@ class GeocodeEdgeCaseTests(TestCase):
         self.assertEqual(response.status_code, 503)
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views.requests.get")
-    def test_geocode_no_features(self, mock_get):
+    def test_geocode_no_features(self, mock_get, mock_get_nta):
         mock_response = MagicMock()
         mock_response.json.return_value = {"features": []}
         mock_response.raise_for_status.return_value = None
@@ -444,8 +468,9 @@ class GeocodeEdgeCaseTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views.requests.get")
-    def test_geocode_request_exception(self, mock_get):
+    def test_geocode_request_exception(self, mock_get, mock_get_nta):
         import requests as req
 
         mock_get.side_effect = req.RequestException("timeout")
@@ -453,8 +478,9 @@ class GeocodeEdgeCaseTests(TestCase):
         self.assertEqual(response.status_code, 502)
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views.requests.get")
-    def test_geocode_invalid_json(self, mock_get):
+    def test_geocode_invalid_json(self, mock_get, mock_get_nta):
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.side_effect = ValueError("bad json")
@@ -463,8 +489,9 @@ class GeocodeEdgeCaseTests(TestCase):
         self.assertEqual(response.status_code, 502)
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views.requests.get")
-    def test_geocode_bad_center(self, mock_get):
+    def test_geocode_bad_center(self, mock_get, mock_get_nta):
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "features": [{"place_name": "X", "center": []}]
@@ -475,11 +502,20 @@ class GeocodeEdgeCaseTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     @override_settings(MAPBOX_ACCESS_TOKEN="test-token")
+    @patch("mapview.views.get_nta_code_from_coordinates", return_value="MN01")
     @patch("mapview.views._is_within_encoded_regions", side_effect=[False, True])
     @patch("mapview.views.requests.get")
     def test_geocode_filters_out_results_outside_encoded_regions(
-        self, mock_get, mock_is_within
+        self, mock_get, mock_is_within, mock_get_nta
     ):
+        NTARiskScore.objects.create(
+            nta_code="MN01",
+            nta_name="Hudson Square",
+            borough="MANHATTAN",
+            risk_score=6.5,
+            total_violations=1,
+            total_complaints=1,
+        )
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "features": [
